@@ -13,6 +13,7 @@
     "url": "https://github.com/Jubulani/carta-backend.git"
   },
   "scripts": {
-    "install": "neon build --release"
+    "install": "neon build --release",
+    "test": "cd native && cargo test --release"
   }
 }
