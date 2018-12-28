@@ -1,0 +1,18 @@
+[package]
+name = "carta-backend"
+version = "0.1.0"
+authors = ["Andrew Morcom"]
+license = "GPL-3.0-or-later"
+build = "build.rs"
+exclude = ["artifacts.json", "index.node"]
+
+[lib]
+name = "carta_backend"
+crate-type = ["dylib"]
+
+[build-dependencies]
+neon-build = "0.2.0"
+
+[dependencies]
+neon = "0.2.0"
+num_cpus = "1.9.0"
