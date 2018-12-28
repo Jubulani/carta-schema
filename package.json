@@ -8,6 +8,10 @@
   "dependencies": {
     "neon-cli": "^0.2.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jubulani/carta-backend.git"
+  },
   "scripts": {
     "install": "neon build --release"
   }
