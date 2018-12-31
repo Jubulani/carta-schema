@@ -13,6 +13,12 @@ fn thread_count(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(cx.number(num_cpus::get() as f64))
 }
 
+fn hello(mut cx: FunctionContext) -> JsResult<JsString> {
+    Ok(cx.string("Hello Andy!"))
+}
+
 register_module!(mut cx, {
-    cx.export_function("threadCount", thread_count)
+    cx.export_function("threadCount", thread_count)?;
+    cx.export_function("hello", hello)?;
+    Ok(())
 });
