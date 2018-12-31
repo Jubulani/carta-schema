@@ -9,16 +9,15 @@ pub extern fn __cxa_pure_virtual() {
     loop{};
 }
 
-fn thread_count(mut cx: FunctionContext) -> JsResult<JsNumber> {
-    Ok(cx.number(num_cpus::get() as f64))
-}
+fn open_file(mut cx: FunctionContext) -> JsResult<JsString> {
+    // First arguemtn is filename as a string
+    let filename = cx.argument::<JsString>(0)?.value();
 
-fn hello(mut cx: FunctionContext) -> JsResult<JsString> {
-    Ok(cx.string("Hello Andy!"))
+    let ret = format!("Opening file: {}", filename);
+    Ok(cx.string(ret)) 
 }
 
 register_module!(mut cx, {
-    cx.export_function("threadCount", thread_count)?;
-    cx.export_function("hello", hello)?;
+    cx.export_function("openFile", open_file)?;
     Ok(())
 });
