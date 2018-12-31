@@ -13,6 +13,8 @@ fn open_file(mut cx: FunctionContext) -> JsResult<JsString> {
     // First argument is filename as a string
     let filename = cx.argument::<JsString>(0)?.value();
 
+    panic!("File not found!");
+
     let ret = format!("Opening file: {}", filename);
     Ok(cx.string(ret)) 
 }
