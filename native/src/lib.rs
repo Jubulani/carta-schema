@@ -10,7 +10,7 @@ pub extern fn __cxa_pure_virtual() {
 }
 
 fn open_file(mut cx: FunctionContext) -> JsResult<JsString> {
-    // First arguemtn is filename as a string
+    // First argument is filename as a string
     let filename = cx.argument::<JsString>(0)?.value();
 
     let ret = format!("Opening file: {}", filename);
