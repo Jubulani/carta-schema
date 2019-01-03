@@ -1,0 +1,99 @@
+typedef int16: int16_le
+typedef int32: int32_le
+
+// import!() ???
+
+struct VersionU16 {
+	major: int16,
+	minor: int16,
+	patch: int16,
+	release: int16,
+}
+
+type VersionU8 {
+	major: int8,
+	minor: int8,
+	patch: int8,
+	release: int8,
+}
+
+unknown: byte
+
+type ShortStr {
+	len: u8,
+	text: [u8; len],
+}
+
+campaign: ShortStr
+
+name: ShortStr
+
+unknown: [byte] = [1, 0, 0, 0, 0, 0, 0, 1, 0, 16, 1, 167, 133, 1]
+
+type mod {
+	mod_name: ShortStr,
+	version: VersionU8,
+	data: [byte; 4],
+}
+
+struct mods {
+	num_mods: u8,
+	mods: [mod; num_mods],
+}
+
+unknown: [byte] = [0, 0, 0, 0, 0, 231, 1, 0, 0, 3, 3]
+
+type resource {
+	name: ShortStr,
+	freq: int8,
+	size: int8,
+	richness: int8,
+}
+
+struct resources {
+	len: int8,
+	resources: [resource, len]
+}
+
+unknown: [byte; 705]
+
+type DefnVal<T> {
+	name: ShortStr,
+	id: T,
+}
+
+type Defn<T>(expected_type) {
+	type: ShortStr [if expected_type is not null: check_eq!(expected_type)]
+	num_vals: T,
+	vals: [DefnVal<T>; num_vals]
+}
+
+type Defns<T>(expected_type) {
+	len: T,
+	defns: [Defn<T>(expected_type); len]
+}
+
+grids: Defns<int8>("equipment-grid")
+items: Defns<int16>(null)
+tiles: Defns<int8>("tile")
+decoratives: Defns<int8>("optimized-decorative")
+techs: Defns<int>("technology")
+ui_elems: Defns<int16>(null)
+recipe_categories: Defns<int16>("recipe-category")
+item_subgroups: Defns<int16>("item-subgroup")
+item_group: Defns<int8>("item-group")
+fluids: Defns<int16>("fluid")
+signals: Defns<int16>("virtual-signal")
+ammo_categories: Defns<int8>("ammo-category")
+rail_categories: Defns<int8>("rail-category")
+fuel_categories: Defns<int8>("fuel-category")
+resource_categories: Defns<int8>("resource-category")
+equipment: Defns<int16>(null)
+layers: Defns<int8>("noise-layer")
+noise_expressions: Defns<int32>("noise_expression")
+autoplace_controls: Defns<int8>("autoplace-control")
+damage_type: Defns<int8>("damage-type")
+recipes: Defns<int16>("recipe")
+achievements: Defns<int8>(null)
+module_categories: Defns<int8>("module-category")
+equipment_categories: Defns<int8>("equipment-category")
