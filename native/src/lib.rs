@@ -1,3 +1,5 @@
+extern crate log;
+
 #[macro_use]
 extern crate neon;
 
@@ -6,6 +8,8 @@ extern crate simplelog;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
+
+use log::{info, trace, warn};
 
 use neon::prelude::*;
 
@@ -83,13 +87,16 @@ fn init(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let res = WriteLogger::init(LevelFilter::Debug, Config::default(), File::create("carta-backend.log").unwrap());
 
     if let Err(res) = res {
-        cx.throw_error("File not found");
+        let _: JsResult<JsError> = cx.throw_error("File not found");
     }
+
+    info!("Init complete");
 
     Ok(cx.undefined())
 }
 
 register_module!(mut cx, {
     cx.export_function("openFile", open_file)?;
+    cx.export_function("init", init)?;
     Ok(())
 });
