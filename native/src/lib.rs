@@ -83,10 +83,13 @@ fn open_file(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(cx.number(handle as f64))
 }
 
-fn init(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    let res = WriteLogger::init(LevelFilter::Debug, Config::default(), File::create("carta-backend.log").unwrap());
+fn init_logging() -> Result<(), log::SetLoggerError> {
+    WriteLogger::init(LevelFilter::Debug, Config::default(), File::create("carta-backend.log").unwrap())
+}
 
-    if let Err(res) = res {
+fn init(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+
+    if let Err(res) = init_logging() {
         let _: JsResult<JsError> = cx.throw_error("File not found");
     }
 
@@ -100,3 +103,15 @@ register_module!(mut cx, {
     cx.export_function("init", init)?;
     Ok(())
 });
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        init_logging();
+        info!("Logging works");
+    }
+}
