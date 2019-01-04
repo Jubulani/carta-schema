@@ -1,11 +1,15 @@
 #[macro_use]
 extern crate neon;
 
+extern crate simplelog;
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 
 use neon::prelude::*;
+
+use simplelog::*;
 
 static mut PROGRAM_DATA: Option<ProgramData> = None;
 
@@ -73,6 +77,16 @@ fn open_file(mut cx: FunctionContext) -> JsResult<JsNumber> {
     program_data.set_file_data(handle, file_data);
 
     Ok(cx.number(handle as f64))
+}
+
+fn init(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let res = WriteLogger::init(LevelFilter::Debug, Config::default(), File::create("carta-backend.log").unwrap());
+
+    if let Err(res) = res {
+        cx.throw_error("File not found");
+    }
+
+    Ok(cx.undefined())
 }
 
 register_module!(mut cx, {
