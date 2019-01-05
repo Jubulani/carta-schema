@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 
-use log::{info, trace, warn};
+use log::{info, debug};
 
 use neon::prelude::*;
 
@@ -50,7 +50,7 @@ pub extern fn __cxa_pure_virtual() {
     loop{};
 }
 
-fn get_program_data() -> &'static mut ProgramData {
+fn get_global_program_data() -> &'static mut ProgramData {
     let ret;
     unsafe {
         ret = PROGRAM_DATA.get_or_insert_with(ProgramData::new)
@@ -69,10 +69,13 @@ fn read_file(filename: &str) -> FileData {
 
 fn open_file(mut cx: FunctionContext) -> JsResult<JsNumber> {
 
+    info!("Open file");
+
     // First argument is filename as a string
     let filename = cx.argument::<JsString>(0)?.value();
+    debug!("Filename: {}", filename);
 
-    let program_data = get_program_data();
+    let program_data = get_global_program_data();
 
     let handle = program_data.get_next_handle();
 
@@ -83,13 +86,40 @@ fn open_file(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(cx.number(handle as f64))
 }
 
+fn get_binary_data(mut cx: FunctionContext) -> JsResult<JsArray> {
+
+    info!("Get binary data");
+
+    let handle = cx.argument::<JsNumber>(0)?.value() as usize;
+    debug!("Handle: {}", handle);
+
+    let num_elems = cx.argument::<JsNumber>(1)?.value() as usize;
+    debug!("Num elements: {}", num_elems);
+
+    let program_data = get_global_program_data();
+    let file_data = program_data.file_data.get(&handle).unwrap();
+
+    let num_elems = std::cmp::min(num_elems, file_data.buffer.len());
+
+    let js_array = JsArray::new(&mut cx, num_elems as u32);
+
+    for i in 0..num_elems {
+        let js_number = cx.number(file_data.buffer[i] as f64);
+        js_array.set(&mut cx, i as u32, js_number).unwrap();
+    }
+
+    Ok(js_array)
+}
+
 fn init_logging() -> Result<(), log::SetLoggerError> {
     WriteLogger::init(LevelFilter::Debug, Config::default(), File::create("carta-backend.log").unwrap())
 }
 
 fn init(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
-    if let Err(res) = init_logging() {
+    let res = init_logging();
+
+    if res.is_err() {
         let _: JsResult<JsError> = cx.throw_error("File not found");
     }
 
@@ -99,8 +129,9 @@ fn init(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 register_module!(mut cx, {
-    cx.export_function("openFile", open_file)?;
     cx.export_function("init", init)?;
+    cx.export_function("openFile", open_file)?;
+    cx.export_function("getBinaryData", get_binary_data)?;
     Ok(())
 });
 
@@ -110,8 +141,9 @@ mod test {
     use super::*;
 
     #[test]
-    fn it_works() {
-        init_logging();
+    fn test_init_logging() {
+        let r = init_logging();
+        assert!(r.is_ok());
         info!("Logging works");
     }
 }
