@@ -1,7 +1,12 @@
+mod compiler;
+
 extern crate log;
 
 #[macro_use]
 extern crate neon;
+
+#[macro_use]
+extern crate lazy_static;
 
 extern crate simplelog;
 
@@ -9,7 +14,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 
-use log::{info, debug};
+use log::{debug, info};
 
 use neon::prelude::*;
 
@@ -23,7 +28,9 @@ struct ProgramData {
 
 impl ProgramData {
     fn new() -> ProgramData {
-        ProgramData { file_data: HashMap::new() }
+        ProgramData {
+            file_data: HashMap::new(),
+        }
     }
 
     fn get_next_handle(&self) -> usize {
@@ -40,21 +47,19 @@ impl ProgramData {
 }
 
 struct FileData {
-    buffer: Vec<u8>
+    buffer: Vec<u8>,
 }
 
 // Get rid of 'undefined function __cxa_pure_virtual' error.
 // See: https://users.rust-lang.org/t/neon-electron-undefined-symbol-cxa-pure-virtual/21223
 #[no_mangle]
-pub extern fn __cxa_pure_virtual() {
-    loop{};
+pub extern "C" fn __cxa_pure_virtual() {
+    loop {}
 }
 
 fn get_global_program_data() -> &'static mut ProgramData {
     let ret;
-    unsafe {
-        ret = PROGRAM_DATA.get_or_insert_with(ProgramData::new)
-    }
+    unsafe { ret = PROGRAM_DATA.get_or_insert_with(ProgramData::new) }
     ret
 }
 
@@ -62,13 +67,13 @@ fn read_file(filename: &str) -> FileData {
     let mut f = File::open(filename).expect(&format!("File not found: {}", filename));
     let mut buffer = Vec::new();
 
-    f.read_to_end(&mut buffer).expect(&format!("Error reading file: {}", filename));
+    f.read_to_end(&mut buffer)
+        .expect(&format!("Error reading file: {}", filename));
 
     FileData { buffer }
 }
 
 fn open_file(mut cx: FunctionContext) -> JsResult<JsNumber> {
-
     info!("Open file");
 
     // First argument is filename as a string
@@ -87,7 +92,6 @@ fn open_file(mut cx: FunctionContext) -> JsResult<JsNumber> {
 }
 
 fn get_binary_data(mut cx: FunctionContext) -> JsResult<JsArray> {
-
     info!("Get binary data");
 
     let handle = cx.argument::<JsNumber>(0)?.value() as usize;
@@ -112,11 +116,14 @@ fn get_binary_data(mut cx: FunctionContext) -> JsResult<JsArray> {
 }
 
 fn init_logging() -> Result<(), log::SetLoggerError> {
-    WriteLogger::init(LevelFilter::Debug, Config::default(), File::create("carta-backend.log").unwrap())
+    WriteLogger::init(
+        LevelFilter::Debug,
+        Config::default(),
+        File::create("carta-backend.log").unwrap(),
+    )
 }
 
 fn init(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-
     let res = init_logging();
 
     if res.is_err() {
@@ -128,13 +135,18 @@ fn init(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     Ok(cx.undefined())
 }
 
+fn compile_schema_file(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    compiler::compile_schema_file("schema.carta");
+    Ok(cx.undefined())
+}
+
 register_module!(mut cx, {
     cx.export_function("init", init)?;
     cx.export_function("openFile", open_file)?;
     cx.export_function("getBinaryData", get_binary_data)?;
+    cx.export_function("compileSchemaFile", compile_schema_file)?;
     Ok(())
 });
-
 
 #[cfg(test)]
 mod test {

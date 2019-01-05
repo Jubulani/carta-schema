@@ -1,0 +1,21 @@
+%{IF a%}
+ blah = true
+%{ENDIF}%
+
+type header {
+	name: [ascii; 4],
+	required: bool = name[0] & 0x100,
+}
+
+%{LOOP}%
+	chunk: header
+	%{IF chunk.name == 'IEND'}%
+		%{BREAK}%
+	%{ENDIF%}
+%{ENDLOOP}%
+
+header
+IHDR
+%{LOOP}%
+	chunk
+%{ENDLOOP}%

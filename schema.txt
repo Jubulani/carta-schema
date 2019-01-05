@@ -63,7 +63,7 @@ type DefnVal<T> {
 }
 
 type Defn<T>(expected_type) {
-	type: ShortStr [if expected_type is not null: check_eq!(expected_type)]
+	type: ShortStr %{EXEC if expected_type is not null: check_eq!(expected_type)}%,
 	num_vals: T,
 	vals: [DefnVal<T>; num_vals]
 }
