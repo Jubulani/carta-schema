@@ -1,14 +1,15 @@
 use std::fs;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Token {
     kind: TokenType,
-    value: String,
+    value: Option<String>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum TokenType {
-    WORD,
+    Word,
+    TypeOf,
 }
 
 pub struct Tokeniser {
@@ -31,10 +32,14 @@ impl Tokeniser {
             curr_pos: 0,
         }
     }
+}
 
-    pub fn next(&mut self) -> Option<&Token> {
+impl Iterator for Tokeniser {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Token> {
         if self.curr_pos < self.tokens.len() {
-            let t = &self.tokens[self.curr_pos];
+            let t = self.tokens[self.curr_pos].clone();
             self.curr_pos += 1;
             Some(t)
         } else {
@@ -56,8 +61,8 @@ trait State {
 struct EmptyState;
 
 impl State for EmptyState {
-    fn new_char(self: Box<Self>, c: char, _: &mut Vec<Token>) -> Box<dyn State> {
-        if let Some(s) = new_state(c) {
+    fn new_char(self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn State> {
+        if let Some(s) = new_state(c, tokens) {
             return s;
         }
         self
@@ -92,7 +97,7 @@ impl State for WordState {
                 panic!("Expected token");
             }
 
-            if let Some(s) = new_state(c) {
+            if let Some(s) = new_state(c, tokens) {
                 return s;
             }
         }
@@ -101,13 +106,13 @@ impl State for WordState {
 
     fn get_token(self: Box<Self>) -> Option<Token> {
         Some(Token {
-            kind: TokenType::WORD,
-            value: self.value,
+            kind: TokenType::Word,
+            value: Some(self.value),
         })
     }
 }
 
-fn new_state(c: char) -> Option<Box<dyn State>> {
+fn new_state(c: char, tokens: &mut Vec<Token>) -> Option<Box<dyn State>> {
     if c.is_whitespace() {
         return None;
     }
@@ -115,7 +120,13 @@ fn new_state(c: char) -> Option<Box<dyn State>> {
         return Some(Box::new(WordState::new(c)));
     }
 
-    None
+    // No state needed
+    if c == ':' {
+        tokens.push(Token { kind: TokenType::TypeOf, value: None });
+        return None;
+    }
+
+    panic!("Unknown symbol: {}", c);
 }
 
 #[cfg(test)]
@@ -132,9 +143,9 @@ mod test {
         let mut tok = Tokeniser::new("abc".to_string());
         assert_eq!(
             tok.next(),
-            Some(&Token {
-                kind: TokenType::WORD,
-                value: "abc".to_string()
+            Some(Token {
+                kind: TokenType::Word,
+                value: Some("abc".to_string())
             })
         );
         assert_eq!(tok.next(), None);
@@ -145,9 +156,9 @@ mod test {
         let mut tok = Tokeniser::new(" abc23".to_string());
         assert_eq!(
             tok.next(),
-            Some(&Token {
-                kind: TokenType::WORD,
-                value: "abc23".to_string()
+            Some(Token {
+                kind: TokenType::Word,
+                value: Some("abc23".to_string())
             })
         );
         assert_eq!(tok.next(), None);
@@ -158,9 +169,9 @@ mod test {
         let mut tok = Tokeniser::new("\n_abc_abc".to_string());
         assert_eq!(
             tok.next(),
-            Some(&Token {
-                kind: TokenType::WORD,
-                value: "_abc_abc".to_string()
+            Some(Token {
+                kind: TokenType::Word,
+                value: Some("_abc_abc".to_string())
             })
         );
         assert_eq!(tok.next(), None);
@@ -171,9 +182,9 @@ mod test {
         let mut tok = Tokeniser::new("\tabc".to_string());
         assert_eq!(
             tok.next(),
-            Some(&Token {
-                kind: TokenType::WORD,
-                value: "abc".to_string()
+            Some(Token {
+                kind: TokenType::Word,
+                value: Some("abc".to_string())
             })
         );
         assert_eq!(tok.next(), None);
@@ -184,30 +195,57 @@ mod test {
         let mut tok = Tokeniser::new("abc def\nghi\tjkl ".to_string());
         assert_eq!(
             tok.next(),
-            Some(&Token {
-                kind: TokenType::WORD,
-                value: "abc".to_string()
+            Some(Token {
+                kind: TokenType::Word,
+                value: Some("abc".to_string())
             })
         );
         assert_eq!(
             tok.next(),
-            Some(&Token {
-                kind: TokenType::WORD,
-                value: "def".to_string()
+            Some(Token {
+                kind: TokenType::Word,
+                value: Some("def".to_string())
             })
         );
         assert_eq!(
             tok.next(),
-            Some(&Token {
-                kind: TokenType::WORD,
-                value: "ghi".to_string()
+            Some(Token {
+                kind: TokenType::Word,
+                value: Some("ghi".to_string())
             })
         );
         assert_eq!(
             tok.next(),
-            Some(&Token {
-                kind: TokenType::WORD,
-                value: "jkl".to_string()
+            Some(Token {
+                kind: TokenType::Word,
+                value: Some("jkl".to_string())
+            })
+        );
+        assert_eq!(tok.next(), None);
+    }
+
+    #[test]
+    fn test_basic_typeof() {
+        let mut tok = Tokeniser::new("abc: uint64_le".to_string());
+        assert_eq!(
+            tok.next(),
+            Some(Token {
+                kind: TokenType::Word,
+                value: Some("abc".to_string())
+            })
+        );
+        assert_eq!(
+            tok.next(),
+            Some(Token {
+                kind: TokenType::TypeOf,
+                value: None
+            })
+        );
+        assert_eq!(
+            tok.next(),
+            Some(Token {
+                kind: TokenType::Word,
+                value: Some("uint64_le".to_string())
             })
         );
         assert_eq!(tok.next(), None);
