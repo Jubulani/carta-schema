@@ -10,6 +10,7 @@ pub struct Token {
 pub enum TokenType {
     Word,
     TypeOf,
+    NewLine,
 }
 
 pub struct Tokeniser {
@@ -121,6 +122,10 @@ impl State for WordState {
 }
 
 fn new_state(c: char, tokens: &mut Vec<Token>) -> Option<Box<dyn State>> {
+    if c == '\n' {
+        tokens.push(Token { kind: TokenType::NewLine, value: None });
+        return None;
+    }
     if c.is_whitespace() {
         return None;
     }
@@ -181,6 +186,13 @@ mod test {
         assert_eq!(
             iter.next(),
             Some(&Token {
+                kind: TokenType::NewLine,
+                value: None
+            })
+        );
+        assert_eq!(
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("_abc_abc".to_string())
             })
@@ -218,6 +230,13 @@ mod test {
             Some(&Token {
                 kind: TokenType::Word,
                 value: Some("def".to_string())
+            })
+        );
+        assert_eq!(
+            iter.next(),
+            Some(&Token {
+                kind: TokenType::NewLine,
+                value: None
             })
         );
         assert_eq!(
