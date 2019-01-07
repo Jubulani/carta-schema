@@ -1,9 +1,21 @@
-use std::fs;
-
 #[derive(PartialEq, Debug, Clone)]
 pub struct Token {
-    kind: TokenType,
+    pub kind: TokenType,
     value: Option<String>,
+}
+
+impl Token {
+    pub fn new(kind: TokenType, value: Option<String>) -> Token {
+        Token { kind, value }
+    }
+
+    pub fn get_value(&self) -> &str {
+        if let Some(val) = &self.value {
+            &val
+        } else {
+            panic!("Expected value from token: {:?}", self);
+        }
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -18,9 +30,9 @@ pub struct Tokeniser {
 }
 
 impl Tokeniser {
-    fn new(data: String) -> Tokeniser {
+    pub fn new(data: &str) -> Tokeniser {
         let mut tokens: Vec<Token> = Vec::new();
-        let mut state: Box<dyn State> = Box::new(EmptyState {});
+        let mut state: Box<dyn TokeniserState> = Box::new(EmptyState {});
         for c in data.chars() {
             state = state.new_char(c, &mut tokens);
         }
@@ -33,7 +45,7 @@ impl Tokeniser {
     pub fn iter<'a>(&'a self) -> IterTokeniser<'a> {
         IterTokeniser {
             inner: self,
-            pos: 0
+            pos: 0,
         }
     }
 }
@@ -57,20 +69,15 @@ impl<'a> Iterator for IterTokeniser<'a> {
     }
 }
 
-pub fn load_file(filename: &str) -> Tokeniser {
-    let s = fs::read_to_string(filename).unwrap();
-    Tokeniser::new(s)
-}
-
-trait State {
-    fn new_char(self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn State>;
+trait TokeniserState {
+    fn new_char(self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn TokeniserState>;
     fn get_token(self: Box<Self>) -> Option<Token>;
 }
 
 struct EmptyState;
 
-impl State for EmptyState {
-    fn new_char(self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn State> {
+impl TokeniserState for EmptyState {
+    fn new_char(self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn TokeniserState> {
         if let Some(s) = new_state(c, tokens) {
             return s;
         }
@@ -94,8 +101,8 @@ impl WordState {
     }
 }
 
-impl State for WordState {
-    fn new_char(mut self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn State> {
+impl TokeniserState for WordState {
+    fn new_char(mut self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn TokeniserState> {
         if c.is_alphabetic() || c.is_numeric() || c == '_' {
             self.value.push(c);
             return self;
@@ -114,16 +121,13 @@ impl State for WordState {
     }
 
     fn get_token(self: Box<Self>) -> Option<Token> {
-        Some(Token {
-            kind: TokenType::Word,
-            value: Some(self.value),
-        })
+        Some(Token::new(TokenType::Word, Some(self.value)))
     }
 }
 
-fn new_state(c: char, tokens: &mut Vec<Token>) -> Option<Box<dyn State>> {
+fn new_state(c: char, tokens: &mut Vec<Token>) -> Option<Box<dyn TokeniserState>> {
     if c == '\n' {
-        tokens.push(Token { kind: TokenType::NewLine, value: None });
+        tokens.push(Token::new(TokenType::NewLine, None));
         return None;
     }
     if c.is_whitespace() {
@@ -135,7 +139,7 @@ fn new_state(c: char, tokens: &mut Vec<Token>) -> Option<Box<dyn State>> {
 
     // No state needed
     if c == ':' {
-        tokens.push(Token { kind: TokenType::TypeOf, value: None });
+        tokens.push(Token::new(TokenType::TypeOf, None));
         return None;
     }
 
@@ -147,13 +151,8 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_load_file() {
-        let _ = load_file("test_load_file.carta");
-    }
-
-    #[test]
     fn test_tokenise_word() {
-        let tok = Tokeniser::new("abc".to_string());
+        let tok = Tokeniser::new("abc");
         let mut iter = tok.iter();
         assert_eq!(
             iter.next(),
@@ -167,7 +166,7 @@ mod test {
 
     #[test]
     fn test_space_at_start_plus_number() {
-        let tok = Tokeniser::new(" abc23".to_string());
+        let tok = Tokeniser::new(" abc23");
         let mut iter = tok.iter();
         assert_eq!(
             iter.next(),
@@ -181,7 +180,7 @@ mod test {
 
     #[test]
     fn test_newline_at_start_plus_underscore() {
-        let tok = Tokeniser::new("\n_abc_abc".to_string());
+        let tok = Tokeniser::new("\n_abc_abc");
         let mut iter = tok.iter();
         assert_eq!(
             iter.next(),
@@ -202,7 +201,7 @@ mod test {
 
     #[test]
     fn test_whitespace_at_start_tab() {
-        let tok = Tokeniser::new("\tabc".to_string());
+        let tok = Tokeniser::new("\tabc");
         let mut iter = tok.iter();
         assert_eq!(
             iter.next(),
@@ -216,7 +215,7 @@ mod test {
 
     #[test]
     fn test_multiple_words() {
-        let tok = Tokeniser::new("abc def\nghi\tjkl ".to_string());
+        let tok = Tokeniser::new("abc def\nghi\tjkl ");
         let mut iter = tok.iter();
         assert_eq!(
             iter.next(),
@@ -258,7 +257,7 @@ mod test {
 
     #[test]
     fn test_basic_typeof() {
-        let tok = Tokeniser::new("abc: uint64_le".to_string());
+        let tok = Tokeniser::new("abc: uint64_le");
         let mut iter = tok.iter();
         assert_eq!(
             iter.next(),
