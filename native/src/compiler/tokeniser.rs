@@ -14,7 +14,6 @@ pub enum TokenType {
 
 pub struct Tokeniser {
     tokens: Vec<Token>,
-    curr_pos: usize,
 }
 
 impl Tokeniser {
@@ -27,20 +26,29 @@ impl Tokeniser {
         if let Some(t) = state.get_token() {
             tokens.push(t);
         }
-        Tokeniser {
-            tokens,
-            curr_pos: 0,
+        Tokeniser { tokens }
+    }
+
+    pub fn iter<'a>(&'a self) -> IterTokeniser<'a> {
+        IterTokeniser {
+            inner: self,
+            pos: 0
         }
     }
 }
 
-impl Iterator for Tokeniser {
-    type Item = Token;
+pub struct IterTokeniser<'a> {
+    inner: &'a Tokeniser,
+    pos: usize,
+}
 
-    fn next(&mut self) -> Option<Token> {
-        if self.curr_pos < self.tokens.len() {
-            let t = self.tokens[self.curr_pos].clone();
-            self.curr_pos += 1;
+impl<'a> Iterator for IterTokeniser<'a> {
+    type Item = &'a Token;
+
+    fn next(&mut self) -> Option<&'a Token> {
+        if self.pos < self.inner.tokens.len() {
+            let t = &self.inner.tokens[self.pos];
+            self.pos += 1;
             Some(t)
         } else {
             None
@@ -140,114 +148,120 @@ mod test {
 
     #[test]
     fn test_tokenise_word() {
-        let mut tok = Tokeniser::new("abc".to_string());
+        let tok = Tokeniser::new("abc".to_string());
+        let mut iter = tok.iter();
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("abc".to_string())
             })
         );
-        assert_eq!(tok.next(), None);
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn test_space_at_start_plus_number() {
-        let mut tok = Tokeniser::new(" abc23".to_string());
+        let tok = Tokeniser::new(" abc23".to_string());
+        let mut iter = tok.iter();
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("abc23".to_string())
             })
         );
-        assert_eq!(tok.next(), None);
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn test_newline_at_start_plus_underscore() {
-        let mut tok = Tokeniser::new("\n_abc_abc".to_string());
+        let tok = Tokeniser::new("\n_abc_abc".to_string());
+        let mut iter = tok.iter();
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("_abc_abc".to_string())
             })
         );
-        assert_eq!(tok.next(), None);
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn test_whitespace_at_start_tab() {
-        let mut tok = Tokeniser::new("\tabc".to_string());
+        let tok = Tokeniser::new("\tabc".to_string());
+        let mut iter = tok.iter();
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("abc".to_string())
             })
         );
-        assert_eq!(tok.next(), None);
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn test_multiple_words() {
-        let mut tok = Tokeniser::new("abc def\nghi\tjkl ".to_string());
+        let tok = Tokeniser::new("abc def\nghi\tjkl ".to_string());
+        let mut iter = tok.iter();
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("abc".to_string())
             })
         );
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("def".to_string())
             })
         );
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("ghi".to_string())
             })
         );
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("jkl".to_string())
             })
         );
-        assert_eq!(tok.next(), None);
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn test_basic_typeof() {
-        let mut tok = Tokeniser::new("abc: uint64_le".to_string());
+        let tok = Tokeniser::new("abc: uint64_le".to_string());
+        let mut iter = tok.iter();
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("abc".to_string())
             })
         );
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::TypeOf,
                 value: None
             })
         );
         assert_eq!(
-            tok.next(),
-            Some(Token {
+            iter.next(),
+            Some(&Token {
                 kind: TokenType::Word,
                 value: Some("uint64_le".to_string())
             })
         );
-        assert_eq!(tok.next(), None);
+        assert_eq!(iter.next(), None);
     }
 }
