@@ -24,77 +24,77 @@ impl Schema {
 
     fn get_type(&self, name: &str) -> NuggetType {
         match name {
-            "int8" => NuggetType::BuiltinType {
+            "int8" => NuggetType::SimpleType {
                 size: 1,
-                name: "int8",
+                kind: "int8",
             },
-            "int16_be" => NuggetType::BuiltinType {
+            "int16_be" => NuggetType::SimpleType {
                 size: 2,
-                name: "int16_be",
+                kind: "int16_be",
             },
-            "int16_le" => NuggetType::BuiltinType {
+            "int16_le" => NuggetType::SimpleType {
                 size: 2,
-                name: "int16_le",
+                kind: "int16_le",
             },
-            "int32_be" => NuggetType::BuiltinType {
+            "int32_be" => NuggetType::SimpleType {
                 size: 4,
-                name: "int32_be",
+                kind: "int32_be",
             },
-            "int32_le" => NuggetType::BuiltinType {
+            "int32_le" => NuggetType::SimpleType {
                 size: 4,
-                name: "int32_le",
+                kind: "int32_le",
             },
-            "int64_be" => NuggetType::BuiltinType {
+            "int64_be" => NuggetType::SimpleType {
                 size: 8,
-                name: "int64_be",
+                kind: "int64_be",
             },
-            "int64_le" => NuggetType::BuiltinType {
+            "int64_le" => NuggetType::SimpleType {
                 size: 8,
-                name: "int64_le",
+                kind: "int64_le",
             },
-            "uint8" => NuggetType::BuiltinType {
+            "uint8" => NuggetType::SimpleType {
                 size: 1,
-                name: "uint8",
+                kind: "uint8",
             },
-            "uint16_be" => NuggetType::BuiltinType {
+            "uint16_be" => NuggetType::SimpleType {
                 size: 2,
-                name: "uint16_be",
+                kind: "uint16_be",
             },
-            "uint16_le" => NuggetType::BuiltinType {
+            "uint16_le" => NuggetType::SimpleType {
                 size: 2,
-                name: "uint16_le",
+                kind: "uint16_le",
             },
-            "uint32_be" => NuggetType::BuiltinType {
+            "uint32_be" => NuggetType::SimpleType {
                 size: 4,
-                name: "uint32_be",
+                kind: "uint32_be",
             },
-            "uint32_le" => NuggetType::BuiltinType {
+            "uint32_le" => NuggetType::SimpleType {
                 size: 4,
-                name: "uint32_le",
+                kind: "uint32_le",
             },
-            "uint64_be" => NuggetType::BuiltinType {
+            "uint64_be" => NuggetType::SimpleType {
                 size: 8,
-                name: "uint64_be",
+                kind: "uint64_be",
             },
-            "uint64_le" => NuggetType::BuiltinType {
+            "uint64_le" => NuggetType::SimpleType {
                 size: 8,
-                name: "uint64_le",
+                kind: "uint64_le",
             },
-            "f32_be" => NuggetType::BuiltinType {
+            "f32_be" => NuggetType::SimpleType {
                 size: 4,
-                name: "f32_be",
+                kind: "f32_be",
             },
-            "f32_le" => NuggetType::BuiltinType {
+            "f32_le" => NuggetType::SimpleType {
                 size: 4,
-                name: "f32_le",
+                kind: "f32_le",
             },
-            "f64_be" => NuggetType::BuiltinType {
+            "f64_be" => NuggetType::SimpleType {
                 size: 8,
-                name: "f64_be",
+                kind: "f64_be",
             },
-            "f64_le" => NuggetType::BuiltinType {
+            "f64_le" => NuggetType::SimpleType {
                 size: 8,
-                name: "f64_le",
+                kind: "f64_le",
             },
             _ => panic!("Unrecognised type: {}", name),
         }
@@ -121,16 +121,23 @@ impl<'a> Iterator for IterSchema<'a> {
 }
 
 #[derive(PartialEq, Debug)]
-enum NuggetType {
-    UserDefinedType { children: Vec<ILNugget> },
-    BuiltinType { size: usize, name: &'static str },
-}
-
-#[derive(PartialEq, Debug)]
 pub struct ILNugget {
     name: String,
     kind: NuggetType,
 }
+
+struct ArrayType {}
+
+#[derive(PartialEq, Debug)]
+enum NuggetType {
+    CompoundType { children: Vec<ILNugget> },
+    SimpleType { size: usize, kind: &'static str },
+}
+
+/*struct NuggetStructDefn {
+    name: String,
+    members: Vec<NuggetType::SimpleType>,
+}*/
 
 trait CompilerState {
     fn new_token(self: Box<Self>, t: &Token, schema: &mut Schema) -> Box<dyn CompilerState>;
@@ -208,9 +215,88 @@ impl CompilerState for NewNuggetState {
     }
 }
 
+struct StructState {
+    state: StructSubState,
+    name: String,
+    complete_children: Vec<ILNugget>,
+    building_child: Option<ILNugget>,
+}
+
+#[derive(PartialEq)]
+enum StructSubState {
+    Name,
+    OpenBrace,
+    ChildName,
+    ChildTypeOf,
+    ChildKind,
+}
+
+impl StructState {
+    fn new(t: &Token) -> StructState {
+        StructState {
+            state: StructSubState::Name,
+            name: t.get_value().to_string(),
+            complete_children: Vec::new(),
+            building_child: None,
+        }
+    }
+}
+
+impl CompilerState for StructState {
+    fn new_token(mut self: Box<Self>, t: &Token, schema: &mut Schema) -> Box<dyn CompilerState> {
+        // New lines are ignored in struct definitions
+        if t.kind == TokenType::NewLine {
+            return self;
+        }
+
+        /*match self.state {
+        StructSubState::Name => {
+            // Next state must be OpenBrace
+            if t.kind != TokenType::OpenBrace {
+                panic!("Expected '{{', got: {:?}", t);
+            }
+            self.state = StructSubState::OpenBrace;
+        }
+        StructSubState::OpenBrace => {
+            // Next state must be the type name, or a close brace for an empty struct
+            match t.kind {
+                TokenType::CloseBrace => "??",
+                TokenType::Word => {}
+            }
+            self.kind = Some(schema.get_type(t.get_value()));
+            self.state = NewNuggetSubState::Kind;
+        } /*StructSubState::Kind => {
+              // Next state must be a newline
+              if t.kind != TokenType::NewLine {
+                  panic!("Expected '\n', got: {:?}", t);
+              }
+
+              if let Some(kind) = self.kind {
+                  let nugget = ILNugget {
+                      name: self.name,
+                      kind,
+                  };
+                  schema.push(nugget);
+                  return Box::new(EmptyState);
+              } else {
+                  panic!("Kind not available");
+              }
+          }*/
+        }*/
+
+        self
+    }
+}
+
 fn new_state(t: &Token) -> Option<Box<dyn CompilerState>> {
     if t.kind == TokenType::Word {
-        return Some(Box::new(NewNuggetState::new(t)));
+        // Match against language keywords
+        return match t.get_value() {
+            "struct" => Some(Box::new(StructState::new(t))),
+
+            // If not a keyword, must be a new nugget name
+            _ => Some(Box::new(NewNuggetState::new(t))),
+        };
     } else if t.kind == TokenType::NewLine {
         // Empty newline - nothing to parse
         return None;
@@ -254,9 +340,9 @@ mod test {
             iter.next(),
             Some(&ILNugget {
                 name: "new_name".to_string(),
-                kind: NuggetType::BuiltinType {
+                kind: NuggetType::SimpleType {
                     size: 8,
-                    name: "uint64_le"
+                    kind: "uint64_le"
                 },
             })
         );
@@ -284,9 +370,9 @@ name3: f64_le
             iter.next(),
             Some(&ILNugget {
                 name: "name1".to_string(),
-                kind: NuggetType::BuiltinType {
+                kind: NuggetType::SimpleType {
                     size: 1,
-                    name: "int8"
+                    kind: "int8"
                 },
             })
         );
@@ -294,9 +380,9 @@ name3: f64_le
             iter.next(),
             Some(&ILNugget {
                 name: "name2".to_string(),
-                kind: NuggetType::BuiltinType {
+                kind: NuggetType::SimpleType {
                     size: 8,
-                    name: "uint64_be"
+                    kind: "uint64_be"
                 },
             })
         );
@@ -304,13 +390,66 @@ name3: f64_le
             iter.next(),
             Some(&ILNugget {
                 name: "name3".to_string(),
-                kind: NuggetType::BuiltinType {
+                kind: NuggetType::SimpleType {
                     size: 8,
-                    name: "f64_le"
+                    kind: "f64_le"
                 },
             })
         );
         assert_eq!(iter.next(), None);
     }
 
+    #[test]
+    fn test_new_type() {
+        let schema = compile_schema(
+            "struct new_type {
+    inner_val1: int8,
+    inner_val2: int8,
+}
+val: new_type",
+        );
+        let mut iter = schema.iter();
+        /*assert_eq!(
+            iter.next(),
+            Some(&ILNugget {
+                name: "new_type".to_string(),
+                size: 1,
+                kind: NuggetType::CompoundType {
+                    children: vec![ILNugget {
+                        name: "inner_val".to_string(),
+                        size: 1,
+                        kind: NuggetType::SimpleType {
+                            size: 1,
+                            kind: "int8"
+                        }
+                    }]
+                },
+            })
+        );*/
+        assert_eq!(
+            iter.next(),
+            Some(&ILNugget {
+                name: "val".to_string(),
+                kind: NuggetType::CompoundType {
+                    children: vec![
+                        ILNugget {
+                            name: "inner_val1".to_string(),
+                            kind: NuggetType::SimpleType {
+                                size: 1,
+                                kind: "int8"
+                            }
+                        },
+                        ILNugget {
+                            name: "inner_val2".to_string(),
+                            kind: NuggetType::SimpleType {
+                                size: 1,
+                                kind: "int8"
+                            }
+                        }
+                    ]
+                },
+            })
+        );
+        assert_eq!(iter.next(), None);
+    }
 }

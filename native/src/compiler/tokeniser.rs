@@ -23,6 +23,9 @@ pub enum TokenType {
     Word,
     TypeOf,
     NewLine,
+    OpenBrace,
+    CloseBrace,
+    Comma,
 }
 
 pub struct Tokeniser {
@@ -140,6 +143,18 @@ fn new_state(c: char, tokens: &mut Vec<Token>) -> Option<Box<dyn TokeniserState>
     // No state needed
     if c == ':' {
         tokens.push(Token::new(TokenType::TypeOf, None));
+        return None;
+    }
+    if c == '{' {
+        tokens.push(Token::new(TokenType::OpenBrace, None));
+        return None;
+    }
+    if c == '}' {
+        tokens.push(Token::new(TokenType::CloseBrace, None));
+        return None;
+    }
+    if c == ',' {
+        tokens.push(Token::new(TokenType::Comma, None));
         return None;
     }
 
