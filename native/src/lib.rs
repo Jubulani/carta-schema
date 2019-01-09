@@ -1,12 +1,5 @@
 mod compiler;
 
-extern crate log;
-
-#[macro_use]
-extern crate neon;
-
-extern crate simplelog;
-
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -14,6 +7,7 @@ use std::io::Read;
 use log::{debug, info};
 
 use neon::prelude::*;
+use neon::register_module;
 
 use simplelog::*;
 

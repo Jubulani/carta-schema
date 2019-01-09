@@ -171,7 +171,7 @@ impl NewNuggetState {
     fn new(t: &Token) -> NewNuggetState {
         NewNuggetState {
             state: NewNuggetSubState::Name,
-            name: t.get_value().to_string(),
+            name: t.value().to_string(),
             kind: None,
         }
     }
@@ -189,7 +189,7 @@ impl CompilerState for NewNuggetState {
             }
             NewNuggetSubState::TypeOf => {
                 // Next state must be the type name
-                self.kind = Some(schema.get_type(t.get_value()));
+                self.kind = Some(schema.get_type(t.value()));
                 self.state = NewNuggetSubState::Kind;
             }
             NewNuggetSubState::Kind => {
@@ -235,7 +235,7 @@ impl StructState {
     fn new(t: &Token) -> StructState {
         StructState {
             state: StructSubState::Name,
-            name: t.get_value().to_string(),
+            name: t.value().to_string(),
             complete_children: Vec::new(),
             building_child: None,
         }
@@ -263,7 +263,7 @@ impl CompilerState for StructState {
                 TokenType::CloseBrace => "??",
                 TokenType::Word => {}
             }
-            self.kind = Some(schema.get_type(t.get_value()));
+            self.kind = Some(schema.get_type(t.value()));
             self.state = NewNuggetSubState::Kind;
         } /*StructSubState::Kind => {
               // Next state must be a newline
@@ -291,7 +291,7 @@ impl CompilerState for StructState {
 fn new_state(t: &Token) -> Option<Box<dyn CompilerState>> {
     if t.kind == TokenType::Word {
         // Match against language keywords
-        return match t.get_value() {
+        return match t.value() {
             "struct" => Some(Box::new(StructState::new(t))),
 
             // If not a keyword, must be a new nugget name
