@@ -1,4 +1,5 @@
 mod tokeniser;
+mod types;
 
 use std::fs;
 
@@ -6,107 +7,37 @@ use crate::compiler::tokeniser::{Token, TokenType, Tokeniser};
 
 pub struct Schema {
     nuggets: Vec<ILNugget>,
+    types: Vec<NuggetStructDefn>,
 }
 
 impl Schema {
-    fn push(&mut self, n: ILNugget) {
-        self.nuggets.push(n);
-    }
-}
-
-impl Schema {
-    pub fn iter<'a>(&'a self) -> IterSchema<'a> {
-        IterSchema {
+    pub fn iter<'a>(&'a self) -> Iter<'a> {
+        Iter {
             inner: self,
             pos: 0,
         }
     }
 
-    fn get_type(&self, name: &str) -> NuggetType {
-        match name {
-            "int8" => NuggetType::SimpleType {
-                size: 1,
-                kind: "int8",
-            },
-            "int16_be" => NuggetType::SimpleType {
-                size: 2,
-                kind: "int16_be",
-            },
-            "int16_le" => NuggetType::SimpleType {
-                size: 2,
-                kind: "int16_le",
-            },
-            "int32_be" => NuggetType::SimpleType {
-                size: 4,
-                kind: "int32_be",
-            },
-            "int32_le" => NuggetType::SimpleType {
-                size: 4,
-                kind: "int32_le",
-            },
-            "int64_be" => NuggetType::SimpleType {
-                size: 8,
-                kind: "int64_be",
-            },
-            "int64_le" => NuggetType::SimpleType {
-                size: 8,
-                kind: "int64_le",
-            },
-            "uint8" => NuggetType::SimpleType {
-                size: 1,
-                kind: "uint8",
-            },
-            "uint16_be" => NuggetType::SimpleType {
-                size: 2,
-                kind: "uint16_be",
-            },
-            "uint16_le" => NuggetType::SimpleType {
-                size: 2,
-                kind: "uint16_le",
-            },
-            "uint32_be" => NuggetType::SimpleType {
-                size: 4,
-                kind: "uint32_be",
-            },
-            "uint32_le" => NuggetType::SimpleType {
-                size: 4,
-                kind: "uint32_le",
-            },
-            "uint64_be" => NuggetType::SimpleType {
-                size: 8,
-                kind: "uint64_be",
-            },
-            "uint64_le" => NuggetType::SimpleType {
-                size: 8,
-                kind: "uint64_le",
-            },
-            "f32_be" => NuggetType::SimpleType {
-                size: 4,
-                kind: "f32_be",
-            },
-            "f32_le" => NuggetType::SimpleType {
-                size: 4,
-                kind: "f32_le",
-            },
-            "f64_be" => NuggetType::SimpleType {
-                size: 8,
-                kind: "f64_be",
-            },
-            "f64_le" => NuggetType::SimpleType {
-                size: 8,
-                kind: "f64_le",
-            },
-            _ => panic!("Unrecognised type: {}", name),
-        }
+    fn add_nugget(&mut self, n: ILNugget) {
+        self.nuggets.push(n);
     }
+
+    fn add_struct(&mut self, s: NuggetStructDefn) {
+        self.types.push(s);
+    }
+
+    /*fn get_type(&self, name: &str) -> NuggetType {
+        let (size, kind) = types::get_type(name);
+        NuggetType::SimpleType { size, kind }
+    }*/
 }
 
-pub struct IterSchema<'a> {
+pub struct Iter<'a> {
     inner: &'a Schema,
     pos: usize,
 }
 
-impl<'a> Iterator for IterSchema<'a> {
+impl<'a> Iterator for Iter<'a> {
     type Item = &'a ILNugget;
 
     fn next(&mut self) -> Option<&'a ILNugget> {
@@ -128,24 +59,14 @@ pub struct ILNugget {
 
 #[derive(PartialEq, Debug)]
 enum NuggetTypeRef {
-    type_name(String),
-    // Template Params
-    // Array ??
-    // Required values ??
+    TypeName(String),
 }
-
-struct ArrayType {}
 
 #[derive(PartialEq, Debug)]
-struct NuggetCompountType {
+struct NuggetStructDefn {
     name: String,
-    children: Vec<NuggetTypeRef>,
+    members: Vec<ILNugget>,
 }
-
-/*struct NuggetStructDefn {
-    name: String,
-    members: Vec<NuggetType::SimpleType>,
-}*/
 
 trait CompilerState {
     fn new_token(self: Box<Self>, t: &Token, schema: &mut Schema) -> Box<dyn CompilerState>;
@@ -165,7 +86,7 @@ impl CompilerState for EmptyState {
 struct NewNuggetState {
     state: NewNuggetSubState,
     name: String,
-    kind: Option<NuggetType>,
+    kind: Option<NuggetTypeRef>,
 }
 
 #[derive(PartialEq)]
@@ -197,7 +118,7 @@ impl CompilerState for NewNuggetState {
             }
             NewNuggetSubState::TypeOf => {
                 // Next state must be the type name
-                self.kind = Some(schema.get_type(t.value()));
+                self.kind = Some(NuggetTypeRef::TypeName(t.value().to_string()));
                 self.state = NewNuggetSubState::Kind;
             }
             NewNuggetSubState::Kind => {
@@ -211,7 +132,7 @@ impl CompilerState for NewNuggetState {
                         name: self.name,
                         kind,
                     };
-                    schema.push(nugget);
+                    schema.add_nugget(nugget);
                     return Box::new(EmptyState);
                 } else {
                     panic!("Kind not available");
@@ -225,13 +146,14 @@ impl CompilerState for NewNuggetState {
 
 struct StructState {
     state: StructSubState,
-    name: String,
+    name: Option<String>,
     complete_children: Vec<ILNugget>,
-    building_child: Option<ILNugget>,
+    new_child_name: Option<String>,
 }
 
 #[derive(PartialEq)]
 enum StructSubState {
+    Begin,
     Name,
     OpenBrace,
     ChildName,
@@ -240,12 +162,12 @@ enum StructSubState {
 }
 
 impl StructState {
-    fn new(t: &Token) -> StructState {
+    fn new() -> StructState {
         StructState {
-            state: StructSubState::Name,
-            name: t.value().to_string(),
+            state: StructSubState::Begin,
+            name: None,
             complete_children: Vec::new(),
-            building_child: None,
+            new_child_name: None,
         }
     }
 }
@@ -257,40 +179,64 @@ impl CompilerState for StructState {
             return self;
         }
 
-        /*match self.state {
-        StructSubState::Name => {
-            // Next state must be OpenBrace
-            if t.kind != TokenType::OpenBrace {
-                panic!("Expected '{{', got: {:?}", t);
+        match self.state {
+            StructSubState::Begin => {
+                if t.kind != TokenType::Word {
+                    panic!("Expected name, got: {:?}", t);
+                }
+                self.name = Some(t.value().to_string());
+                self.state = StructSubState::Name;
             }
-            self.state = StructSubState::OpenBrace;
+            StructSubState::Name => {
+                // Next state must be OpenBrace
+                if t.kind != TokenType::OpenBrace {
+                    panic!("Expected '{{', got: {:?}", t);
+                }
+                self.state = StructSubState::OpenBrace;
+            }
+            StructSubState::OpenBrace => match t.kind {
+                TokenType::CloseBrace => {
+                    // Struct is complete, maybe with child types
+                    let defn = NuggetStructDefn {
+                        name: self.name.unwrap(),
+                        members: self.complete_children,
+                    };
+                    schema.add_struct(defn);
+                    return Box::new(EmptyState {});
+                }
+                TokenType::Word => {
+                    self.new_child_name = Some(t.value().to_string());
+                    self.state = StructSubState::ChildName;
+                }
+                _ => panic!("Expected '}}' or name, got: {:?}", t),
+            },
+            StructSubState::ChildName => {
+                // Next state must be TypeOf
+                if t.kind != TokenType::TypeOf {
+                    panic!("Expected ':', got: {:?}", t);
+                }
+                self.state = StructSubState::ChildTypeOf;
+            }
+            StructSubState::ChildTypeOf => {
+                // Next state must be a typename
+                if t.kind != TokenType::Word {
+                    panic!("Expected type name, got: {:?}", t);
+                }
+                let kind = t.value().to_string();
+                self.complete_children.push(ILNugget {
+                    name: self.new_child_name.take().unwrap(),
+                    kind: NuggetTypeRef::TypeName(kind),
+                });
+                self.state = StructSubState::ChildKind;
+            }
+            StructSubState::ChildKind => {
+                // Next state must be Comma
+                if t.kind != TokenType::Comma {
+                    panic!("Expected ',', got: {:?}", t);
+                }
+                self.state = StructSubState::OpenBrace;
+            }
         }
-        StructSubState::OpenBrace => {
-            // Next state must be the type name, or a close brace for an empty struct
-            match t.kind {
-                TokenType::CloseBrace => "??",
-                TokenType::Word => {}
-            }
-            self.kind = Some(schema.get_type(t.value()));
-            self.state = NewNuggetSubState::Kind;
-        } /*StructSubState::Kind => {
-              // Next state must be a newline
-              if t.kind != TokenType::NewLine {
-                  panic!("Expected '\n', got: {:?}", t);
-              }
-
-              if let Some(kind) = self.kind {
-                  let nugget = ILNugget {
-                      name: self.name,
-                      kind,
-                  };
-                  schema.push(nugget);
-                  return Box::new(EmptyState);
-              } else {
-                  panic!("Kind not available");
-              }
-          }*/
-        }*/
 
         self
     }
@@ -300,7 +246,7 @@ fn new_state(t: &Token) -> Option<Box<dyn CompilerState>> {
     if t.kind == TokenType::Word {
         // Match against language keywords
         return match t.value() {
-            "struct" => Some(Box::new(StructState::new(t))),
+            "struct" => Some(Box::new(StructState::new())),
 
             // If not a keyword, must be a new nugget name
             _ => Some(Box::new(NewNuggetState::new(t))),
@@ -323,6 +269,7 @@ fn compile_schema(s: &str) -> Schema {
 
     let mut schema = Schema {
         nuggets: Vec::new(),
+        types: Vec::new(),
     };
     let mut state: Box<dyn CompilerState> = Box::new(EmptyState {});
     for token in tokeniser.iter() {
@@ -348,10 +295,7 @@ mod test {
             iter.next(),
             Some(&ILNugget {
                 name: "new_name".to_string(),
-                kind: NuggetType::SimpleType {
-                    size: 8,
-                    kind: "uint64_le"
-                },
+                kind: NuggetTypeRef::TypeName("uint64_le".to_string()),
             })
         );
         assert_eq!(iter.next(), None);
@@ -378,30 +322,21 @@ name3: f64_le
             iter.next(),
             Some(&ILNugget {
                 name: "name1".to_string(),
-                kind: NuggetType::SimpleType {
-                    size: 1,
-                    kind: "int8"
-                },
+                kind: NuggetTypeRef::TypeName("int8".to_string()),
             })
         );
         assert_eq!(
             iter.next(),
             Some(&ILNugget {
                 name: "name2".to_string(),
-                kind: NuggetType::SimpleType {
-                    size: 8,
-                    kind: "uint64_be"
-                },
+                kind: NuggetTypeRef::TypeName("uint64_be".to_string()),
             })
         );
         assert_eq!(
             iter.next(),
             Some(&ILNugget {
                 name: "name3".to_string(),
-                kind: NuggetType::SimpleType {
-                    size: 8,
-                    kind: "f64_le"
-                },
+                kind: NuggetTypeRef::TypeName("f64_le".to_string()),
             })
         );
         assert_eq!(iter.next(), None);
@@ -417,47 +352,32 @@ name3: f64_le
             val: new_type",
         );
         let mut iter = schema.iter();
-        /*assert_eq!(
-            iter.next(),
-            Some(&ILNugget {
-                name: "new_type".to_string(),
-                size: 1,
-                kind: NuggetType::CompoundType {
-                    children: vec![ILNugget {
-                        name: "inner_val".to_string(),
-                        size: 1,
-                        kind: NuggetType::SimpleType {
-                            size: 1,
-                            kind: "int8"
-                        }
-                    }]
-                },
-            })
-        );*/
         assert_eq!(
             iter.next(),
             Some(&ILNugget {
                 name: "val".to_string(),
-                kind: NuggetType::CompoundType {
-                    children: vec![
-                        ILNugget {
-                            name: "inner_val1".to_string(),
-                            kind: NuggetType::SimpleType {
-                                size: 1,
-                                kind: "int8"
-                            }
-                        },
-                        ILNugget {
-                            name: "inner_val2".to_string(),
-                            kind: NuggetType::SimpleType {
-                                size: 1,
-                                kind: "int8"
-                            }
-                        }
-                    ]
-                },
+                kind: NuggetTypeRef::TypeName("new_type".to_string()),
             })
         );
         assert_eq!(iter.next(), None);
+
+        let mut types_iter = schema.types.iter();
+        assert_eq!(
+            types_iter.next(),
+            Some(&NuggetStructDefn {
+                name: "new_type".to_string(),
+                members: vec![
+                    ILNugget {
+                        name: "inner_val1".to_string(),
+                        kind: NuggetTypeRef::TypeName("int8".to_string())
+                    },
+                    ILNugget {
+                        name: "inner_val2".to_string(),
+                        kind: NuggetTypeRef::TypeName("int8".to_string())
+                    }
+                ]
+            })
+        );
+        assert_eq!(types_iter.next(), None);
     }
 }
