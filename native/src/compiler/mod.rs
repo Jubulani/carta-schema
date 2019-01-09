@@ -123,15 +123,23 @@ impl<'a> Iterator for IterSchema<'a> {
 #[derive(PartialEq, Debug)]
 pub struct ILNugget {
     name: String,
-    kind: NuggetType,
+    kind: NuggetTypeRef,
+}
+
+#[derive(PartialEq, Debug)]
+enum NuggetTypeRef {
+    type_name(String),
+    // Template Params
+    // Array ??
+    // Required values ??
 }
 
 struct ArrayType {}
 
 #[derive(PartialEq, Debug)]
-enum NuggetType {
-    CompoundType { children: Vec<ILNugget> },
-    SimpleType { size: usize, kind: &'static str },
+struct NuggetCompountType {
+    name: String,
+    children: Vec<NuggetTypeRef>,
 }
 
 /*struct NuggetStructDefn {
@@ -403,10 +411,10 @@ name3: f64_le
     fn test_new_type() {
         let schema = compile_schema(
             "struct new_type {
-    inner_val1: int8,
-    inner_val2: int8,
-}
-val: new_type",
+                inner_val1: int8,
+                inner_val2: int8,
+            }
+            val: new_type",
         );
         let mut iter = schema.iter();
         /*assert_eq!(
