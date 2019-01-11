@@ -254,9 +254,7 @@ fn new_state(t: &Token) -> Option<Box<dyn CompilerState>> {
     panic!("Unknown token: {:?}", t);
 }
 
-pub fn compile_schema(s: &str) -> Schema {
-    let tokeniser = Tokeniser::new(s);
-
+pub fn compile_schema(tokeniser: &Tokeniser) -> Schema {
     let mut schema = Schema {
         nuggets: Vec::new(),
         types: Vec::new(),
@@ -267,8 +265,10 @@ pub fn compile_schema(s: &str) -> Schema {
     }
 
     // Add a final newline, in case one doesn't exist in the input
-    // This will flush any remaining (valid) tokens
+    // This will flush any remaining (valid) nuggets
     state.new_token(&Token::new(TokenType::NewLine, None), &mut schema);
+
+    // TODO: Handle incomplete nuggets still remaining.
 
     schema
 }
@@ -279,7 +279,8 @@ mod test {
 
     #[test]
     fn test_basic_builtin() {
-        let schema = compile_schema("new_name: uint64_le");
+        let tokeniser = Tokeniser::new("new_name: uint64_le");
+        let schema = compile_schema(&tokeniser);
         let mut iter = schema.iter();
         assert_eq!(
             iter.next(),
@@ -293,27 +294,27 @@ mod test {
 
     #[test]
     fn test_empty_input() {
-        let schema = compile_schema("");
+        let tokeniser = Tokeniser::new("");
+        let schema = compile_schema(&tokeniser);
         let mut iter = schema.iter();
         assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn test_whitespace_input() {
-        let schema = compile_schema("\n  \t\n\n");
+        let tokeniser = Tokeniser::new("\n  \t\n\n");
+        let schema = compile_schema(&tokeniser);
         let mut iter = schema.iter();
         assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn test_multiple_builtins() {
-        let schema = compile_schema(
-            "name1: int8
-             name2: uint64_be
-
-             name3: f64_le
-",
-        );
+        let tokeniser = Tokeniser::new("name1: int8
+            name2: uint64_be
+            name3: f64_le
+        ");
+        let schema = compile_schema(&tokeniser);
         let mut iter = schema.iter();
         assert_eq!(
             iter.next(),
@@ -341,13 +342,12 @@ mod test {
 
     #[test]
     fn test_new_type() {
-        let schema = compile_schema(
-            "struct new_type {
+        let tokeniser = Tokeniser::new("struct new_type {
                 inner_val1: int8,
                 inner_val2: int8,
             }
-            val: new_type",
-        );
+            val: new_type");
+        let schema = compile_schema(&tokeniser);
         let mut iter = schema.iter();
         assert_eq!(
             iter.next(),
