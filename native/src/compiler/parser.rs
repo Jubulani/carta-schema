@@ -1,18 +1,11 @@
 use crate::compiler::tokeniser::{Token, TokenType, Tokeniser};
 
 pub struct Schema {
-    nuggets: Vec<ILNugget>,
-    types: Vec<NuggetStructDefn>,
+    pub nuggets: Vec<ILNugget>,
+    pub types: Vec<NuggetStructDefn>,
 }
 
 impl Schema {
-    pub fn iter<'a>(&'a self) -> Iter<'a> {
-        Iter {
-            inner: self,
-            pos: 0,
-        }
-    }
-
     fn add_nugget(&mut self, n: ILNugget) {
         self.nuggets.push(n);
     }
@@ -20,47 +13,23 @@ impl Schema {
     fn add_struct(&mut self, s: NuggetStructDefn) {
         self.types.push(s);
     }
-
-    /*fn get_type(&self, name: &str) -> NuggetType {
-        let (size, kind) = types::get_type(name);
-        NuggetType::SimpleType { size, kind }
-    }*/
-}
-
-pub struct Iter<'a> {
-    inner: &'a Schema,
-    pos: usize,
-}
-
-impl<'a> Iterator for Iter<'a> {
-    type Item = &'a ILNugget;
-
-    fn next(&mut self) -> Option<&'a ILNugget> {
-        if self.pos < self.inner.nuggets.len() {
-            let n = &self.inner.nuggets[self.pos];
-            self.pos += 1;
-            Some(n)
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(PartialEq, Debug)]
 pub struct ILNugget {
-    name: String,
-    kind: NuggetTypeRef,
+    pub name: String,
+    pub kind: NuggetTypeRef,
 }
 
 #[derive(PartialEq, Debug)]
-enum NuggetTypeRef {
+pub enum NuggetTypeRef {
     TypeName(String),
 }
 
 #[derive(PartialEq, Debug)]
-struct NuggetStructDefn {
-    name: String,
-    members: Vec<ILNugget>,
+pub struct NuggetStructDefn {
+    pub name: String,
+    pub members: Vec<ILNugget>,
 }
 
 trait CompilerState {
@@ -281,7 +250,7 @@ mod test {
     fn test_basic_builtin() {
         let tokeniser = Tokeniser::new("new_name: uint64_le");
         let schema = compile_schema(&tokeniser);
-        let mut iter = schema.iter();
+        let mut iter = schema.nuggets.iter();
         assert_eq!(
             iter.next(),
             Some(&ILNugget {
@@ -296,7 +265,7 @@ mod test {
     fn test_empty_input() {
         let tokeniser = Tokeniser::new("");
         let schema = compile_schema(&tokeniser);
-        let mut iter = schema.iter();
+        let mut iter = schema.nuggets.iter();
         assert_eq!(iter.next(), None);
     }
 
@@ -304,18 +273,20 @@ mod test {
     fn test_whitespace_input() {
         let tokeniser = Tokeniser::new("\n  \t\n\n");
         let schema = compile_schema(&tokeniser);
-        let mut iter = schema.iter();
+        let mut iter = schema.nuggets.iter();
         assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn test_multiple_builtins() {
-        let tokeniser = Tokeniser::new("name1: int8
+        let tokeniser = Tokeniser::new(
+            "name1: int8
             name2: uint64_be
             name3: f64_le
-        ");
+        ",
+        );
         let schema = compile_schema(&tokeniser);
-        let mut iter = schema.iter();
+        let mut iter = schema.nuggets.iter();
         assert_eq!(
             iter.next(),
             Some(&ILNugget {
@@ -342,13 +313,15 @@ mod test {
 
     #[test]
     fn test_new_type() {
-        let tokeniser = Tokeniser::new("struct new_type {
+        let tokeniser = Tokeniser::new(
+            "struct new_type {
                 inner_val1: int8,
                 inner_val2: int8,
             }
-            val: new_type");
+            val: new_type",
+        );
         let schema = compile_schema(&tokeniser);
-        let mut iter = schema.iter();
+        let mut iter = schema.nuggets.iter();
         assert_eq!(
             iter.next(),
             Some(&ILNugget {

@@ -10,23 +10,22 @@
  *   Parsing         Extract file elements and structure definitions.  Returns a schema object
  *      |            that contains file elements (Nuggets), and NuggetStructDefns.
  *      V
- * Type checking     Uses the NuggetStructDefns and knowledge of builtin types to do typechecking.
- *      |            Returns TNuggets (Typechecked Nuggets).
+ * Type checking     Uses the NuggetStructDefns and builtin types to do typechecking. Returns
+ *      |            TNuggets (Typechecked Nuggets).
  *      V
  * Final representation
  */
 
 mod parser;
 mod tokeniser;
-mod types;
 mod type_check;
+mod types;
 
 use std::fs;
 
 pub fn compile_schema_file(filename: &str) {
     let s = fs::read_to_string(filename).unwrap();
     let tokeniser = tokeniser::Tokeniser::new(&s);
-    let mut schema = parser::compile_schema(&tokeniser);
-    type_check::type_check_schema(&mut schema);
+    let schema = parser::compile_schema(&tokeniser);
+    type_check::type_check_schema(schema);
 }
-
