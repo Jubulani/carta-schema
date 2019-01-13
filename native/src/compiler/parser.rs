@@ -1,12 +1,12 @@
 use crate::compiler::tokeniser::{Token, TokenType, Tokeniser};
 
 pub struct Schema {
-    pub nuggets: Vec<ILNugget>,
+    pub nuggets: Vec<Nugget>,
     pub types: Vec<NuggetStructDefn>,
 }
 
 impl Schema {
-    fn add_nugget(&mut self, n: ILNugget) {
+    fn add_nugget(&mut self, n: Nugget) {
         self.nuggets.push(n);
     }
 
@@ -16,7 +16,7 @@ impl Schema {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct ILNugget {
+pub struct Nugget {
     pub name: String,
     pub kind: NuggetTypeRef,
 }
@@ -29,7 +29,7 @@ pub enum NuggetTypeRef {
 #[derive(PartialEq, Debug)]
 pub struct NuggetStructDefn {
     pub name: String,
-    pub members: Vec<ILNugget>,
+    pub members: Vec<Nugget>,
 }
 
 trait CompilerState {
@@ -92,7 +92,7 @@ impl CompilerState for NewNuggetState {
                 }
 
                 if let Some(kind) = self.kind {
-                    let nugget = ILNugget {
+                    let nugget = Nugget {
                         name: self.name,
                         kind,
                     };
@@ -111,7 +111,7 @@ impl CompilerState for NewNuggetState {
 struct StructState {
     state: StructSubState,
     name: Option<String>,
-    complete_children: Vec<ILNugget>,
+    complete_children: Vec<Nugget>,
     new_child_name: Option<String>,
 }
 
@@ -187,7 +187,7 @@ impl CompilerState for StructState {
                     panic!("Expected type name, got: {:?}", t);
                 }
                 let kind = t.value().to_string();
-                self.complete_children.push(ILNugget {
+                self.complete_children.push(Nugget {
                     name: self.new_child_name.take().unwrap(),
                     kind: NuggetTypeRef::TypeName(kind),
                 });
@@ -253,7 +253,7 @@ mod test {
         let mut iter = schema.nuggets.iter();
         assert_eq!(
             iter.next(),
-            Some(&ILNugget {
+            Some(&Nugget {
                 name: "new_name".to_string(),
                 kind: NuggetTypeRef::TypeName("uint64_le".to_string()),
             })
@@ -289,21 +289,21 @@ mod test {
         let mut iter = schema.nuggets.iter();
         assert_eq!(
             iter.next(),
-            Some(&ILNugget {
+            Some(&Nugget {
                 name: "name1".to_string(),
                 kind: NuggetTypeRef::TypeName("int8".to_string()),
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&ILNugget {
+            Some(&Nugget {
                 name: "name2".to_string(),
                 kind: NuggetTypeRef::TypeName("uint64_be".to_string()),
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&ILNugget {
+            Some(&Nugget {
                 name: "name3".to_string(),
                 kind: NuggetTypeRef::TypeName("f64_le".to_string()),
             })
@@ -324,7 +324,7 @@ mod test {
         let mut iter = schema.nuggets.iter();
         assert_eq!(
             iter.next(),
-            Some(&ILNugget {
+            Some(&Nugget {
                 name: "val".to_string(),
                 kind: NuggetTypeRef::TypeName("new_type".to_string()),
             })
@@ -337,11 +337,11 @@ mod test {
             Some(&NuggetStructDefn {
                 name: "new_type".to_string(),
                 members: vec![
-                    ILNugget {
+                    Nugget {
                         name: "inner_val1".to_string(),
                         kind: NuggetTypeRef::TypeName("int8".to_string())
                     },
-                    ILNugget {
+                    Nugget {
                         name: "inner_val2".to_string(),
                         kind: NuggetTypeRef::TypeName("int8".to_string())
                     }

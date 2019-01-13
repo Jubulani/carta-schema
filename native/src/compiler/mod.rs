@@ -16,10 +16,10 @@
  * Final representation
  */
 
+mod builtin_types;
 mod parser;
 mod tokeniser;
 mod type_check;
-mod types;
 
 use std::fs;
 

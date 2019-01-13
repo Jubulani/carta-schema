@@ -1,87 +1,80 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::compiler::parser::{ILNugget, NuggetStructDefn, NuggetTypeRef, Schema};
-use crate::compiler::types;
+use crate::compiler::builtin_types;
+use crate::compiler::parser::{Nugget, NuggetStructDefn, NuggetTypeRef, Schema};
 
 pub struct TSchema {
-    nuggets: Vec<TNugget>,
-    types: Vec<TNuggetStructDefn>,
+    pub nuggets: Vec<Nugget>,
+    pub types: HashMap<String, NuggetStructDefn>,
 }
 
-struct TNugget {
-    name: String,
-    kind: TNuggetType,
-}
-
-#[derive(PartialEq, Debug)]
-enum TNuggetType {
-    TNSimpleType(String),
-    TNCompountType { struct_handle: usize },
-}
-
-struct TNuggetStructDefn {
-    name: String,
-    members: Vec<TNugget>,
-}
-
-pub fn type_check_schema(schema: Schema) {
-    let tSchema = TSchema {
-        nuggets: Vec::new(),
-        types: Vec::new(),
-    };
-
+pub fn type_check_schema(schema: Schema) -> TSchema {
     let Schema { nuggets, types } = schema;
 
     let types = check_types(types);
 
-    check_nuggets(nuggets);
+    check_nuggets(&nuggets, &types);
+
+    TSchema { nuggets, types }
 }
 
-// To do here:
-// - Check all types are defined
-// - Check no loops
-// - Resolve all type references
-fn check_types(types: Vec<NuggetStructDefn>) -> Vec<TNuggetStructDefn> {
-    let ret: Vec<TNuggetStructDefn> = Vec::new();
+fn build_types_map(types: Vec<NuggetStructDefn>) -> HashMap<String, NuggetStructDefn> {
+    let mut types_map: HashMap<String, NuggetStructDefn> = HashMap::new();
 
-    // Add all types to a set.  This allows us to check they have all been defined, and resolve
-    // loopups
-    let mut types_set: HashMap<&str, &NuggetStructDefn> = HashMap::new();
-
-    for kind in types.iter() {
-        types_set.insert(&kind.name, &kind);
+    for kind in types.into_iter() {
+        if types_map.contains_key::<str>(&kind.name) {
+            panic!("Duplicate definition of type: {}", &kind.name);
+        }
+        types_map.insert(kind.name.clone(), kind);
         //ret.push(kind);
     }
-    println!("All types: {:?}", types_set);
 
-    // All types are now stored in types_set.  We can now go over all members of all types, and
-    // check that they've been defined.
-    for kind in types.iter() {
+    types_map
+}
+
+fn check_all_types_defined(types_map: &HashMap<String, NuggetStructDefn>) {
+    // All types are now stored in types_map.  We can now go over all members of all types, and
+    // check that they've all been defined.
+    for kind in types_map.values() {
         for member in &kind.members {
             let typename = match &member.kind {
                 NuggetTypeRef::TypeName(s) => s,
             };
-            if !types::is_builtin_type(&typename) && types_set.get::<str>(&typename).is_none() {
+            if !builtin_types::is_builtin_type(&typename)
+                && types_map.get::<str>(&typename).is_none()
+            {
                 panic!("Undefined type: {}", typename);
             }
         }
     }
+}
 
+/// Check that there are no types that recursively depend on themselves.
+fn check_types_no_loops(types_map: &HashMap<String, NuggetStructDefn>) {
+    // Set of all types that have been fully resolved to depend only on builtin types, or
+    // other types that depend transitively on only built-in types.
+    // Hopefully we can eventually add all the types to this set.  If we can't, there must be a loop
     let mut types_resolved: HashSet<&str> = HashSet::new();
+
+    // Map of types to a list of types that depend on this type
     let mut dependant_types: HashMap<&str, Vec<&str>> = HashMap::new();
+
+    // Once a type has been determined to depend (transitively) on only builtin types, then we
+    // can check all types that depend on this type to see if they now do also (using the
+    // dependant_types map).  This is the stack of types to check.
     let mut types_stack: Vec<&str> = Vec::new();
 
-    // Check for loops
-    for kind in types.iter() {
-        println!("Check type: {:?}", &kind.name);
+    // Build the dependant_types map.  Types that trivially depend only on builtin types can be
+    // detected here as well.
+    for kind in types_map.values() {
         let mut all_builtin = true;
         for member in &kind.members {
             let typename = match &member.kind {
                 NuggetTypeRef::TypeName(s) => s,
             };
-            if !types::is_builtin_type(&typename) && types_resolved.get::<str>(&typename).is_none()
+            if !builtin_types::is_builtin_type(&typename)
+                && types_resolved.get::<str>(&typename).is_none()
             {
-                println!("Member not found: {:?}", &typename);
                 all_builtin = false;
 
                 if !dependant_types.contains_key::<str>(&typename) {
@@ -93,57 +86,40 @@ fn check_types(types: Vec<NuggetStructDefn>) -> Vec<TNuggetStructDefn> {
                     .push(&kind.name);
             }
         }
-        println!("Is all builtin: {:?}", all_builtin);
-        println!("Dependant types: {:?}", dependant_types);
 
         match all_builtin {
             true => {
                 types_resolved.insert(&kind.name);
                 types_stack.push(&kind.name);
-                /*if let Some(parents) = dependant_types.get::<str>(&kind.name) {
-                    println!("Have parents: {:?}", parents);
-                    for parent in parents.iter() {
-                        let parent = match types_set.get(parent) {
-                            Some(p) => p,
-                            None => panic!("Unresolved type: {:?}", parent),
-                        };
-                        println!("Check parent: {:?}", parent);
-                        for member in &parent.members {
-                            println!("Check member: {:?}", member);
-                        }
-                    }
-                }*/
             }
             false => {}
         }
     }
-    println!("types_stack: {:?}", types_stack);
 
+    // Go over the stack of resolved types.  Use the dependant_types map to check if the types
+    // the depend on the resolved type can be marked as resolved.
     while let Some(kind_name) = types_stack.pop() {
-        println!("Pop kind: {:?}", &kind_name);
         if let Some(parents) = dependant_types.get::<str>(&kind_name) {
-            println!("Have parents: {:?}", parents);
             for parent in parents.iter() {
-                let parent = match types_set.get(parent) {
+                let parent = match types_map.get::<str>(parent) {
                     Some(p) => p,
                     None => panic!("Unresolved type: {:?}", parent),
                 };
-                println!("Check parent: {:?}", parent);
+
                 let mut all_resolved = true;
                 for member in &parent.members {
-                    println!("Check member: {:?}", member);
                     let typename = match &member.kind {
                         NuggetTypeRef::TypeName(s) => s,
                     };
-                    if !types::is_builtin_type(&typename)
+                    if !builtin_types::is_builtin_type(&typename)
                         && types_resolved.get::<str>(&typename).is_none()
                     {
-                        println!("Unresolved: {:?}", &typename);
                         all_resolved = false;
                     }
                 }
+
+                // Type is now fully resolved.
                 if all_resolved {
-                    println!("Push type: {:?}", &parent.name);
                     types_resolved.insert(&parent.name);
                     types_stack.push(&parent.name);
                 }
@@ -153,7 +129,7 @@ fn check_types(types: Vec<NuggetStructDefn>) -> Vec<TNuggetStructDefn> {
 
     // If any types remain that aren't listed in types_resolved, then we must have a loop
     let mut recursive_types = Vec::new();
-    for kind in types.iter() {
+    for kind in types_map.values() {
         if types_resolved.get::<str>(&kind.name).is_none() {
             recursive_types.push(&kind.name);
         }
@@ -161,26 +137,40 @@ fn check_types(types: Vec<NuggetStructDefn>) -> Vec<TNuggetStructDefn> {
     if recursive_types.len() > 0 {
         panic!("Recursive types detected with types: {:?}", recursive_types);
     }
-
-    ret
 }
 
-fn check_nuggets(nuggets: Vec<ILNugget>) {
-    for nugget in nuggets.iter() {}
+fn check_types(types: Vec<NuggetStructDefn>) -> HashMap<String, NuggetStructDefn> {
+    let types_map = build_types_map(types);
+    check_all_types_defined(&types_map);
+    check_types_no_loops(&types_map);
+
+    types_map
+}
+
+// Check that all nugget types have been defined
+fn check_nuggets(nuggets: &Vec<Nugget>, types_map: &HashMap<String, NuggetStructDefn>) {
+    for nugget in nuggets.iter() {
+        let typename = match &nugget.kind {
+            NuggetTypeRef::TypeName(s) => s,
+        };
+        if !types_map.contains_key::<str>(&typename) {
+            panic!("Unknown type name: {}", &typename);
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
 
-    fn build_nugget(name: &str, typename: &str) -> ILNugget {
-        ILNugget {
+    fn build_nugget(name: &str, typename: &str) -> Nugget {
+        Nugget {
             name: name.to_string(),
             kind: NuggetTypeRef::TypeName(typename.to_string()),
         }
     }
 
-    fn build_type(name: &str, nuggets: Vec<ILNugget>) -> NuggetStructDefn {
+    fn build_type(name: &str, nuggets: Vec<Nugget>) -> NuggetStructDefn {
         NuggetStructDefn {
             name: name.to_string(),
             members: nuggets,
@@ -345,6 +335,58 @@ mod test {
         let schema = Schema {
             nuggets: vec![],
             types: vec![t1, t2, t3, t4, t5, t6, t7],
+        };
+        type_check_schema(schema);
+    }
+
+    #[test]
+    #[should_panic(expected = "Duplicate definition of type: type1")]
+    fn test_duplicate_types() {
+        let t1 = build_type(
+            "type1",
+            vec![
+                build_nugget("inner1", "uint8"),
+                build_nugget("inner2", "uint64_le"),
+            ],
+        );
+        let t2 = build_type("type1", vec![build_nugget("inner3", "type1")]);
+        let schema = Schema {
+            nuggets: vec![build_nugget("name1", "type1")],
+            types: vec![t1, t2],
+        };
+        type_check_schema(schema);
+    }
+
+    #[test]
+    #[should_panic(expected = "Recursive types detected with types: [\"type1\"]")]
+    fn test_recursive_type() {
+        let t1 = build_type(
+            "type1",
+            vec![
+                build_nugget("inner1", "type1"),
+                build_nugget("inner2", "uint64_le"),
+            ],
+        );
+        let schema = Schema {
+            nuggets: vec![build_nugget("name1", "type1")],
+            types: vec![t1],
+        };
+        type_check_schema(schema);
+    }
+
+    #[test]
+    #[should_panic(expected = "Unknown type name: bad_type")]
+    fn test_nugget_bad_typename() {
+        let t1 = build_type(
+            "type1",
+            vec![
+                build_nugget("inner1", "uint8"),
+                build_nugget("inner2", "uint64_le"),
+            ],
+        );
+        let schema = Schema {
+            nuggets: vec![build_nugget("name1", "bad_type")],
+            types: vec![t1],
         };
         type_check_schema(schema);
     }
