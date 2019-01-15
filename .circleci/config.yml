@@ -53,6 +53,6 @@ workflows:
   build-and-coverage:
     jobs:
       - build_and_test
-      - coverage
+      - coverage:
           requires:
             - build_and_test
