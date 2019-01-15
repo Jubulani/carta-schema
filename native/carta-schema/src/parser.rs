@@ -1,4 +1,4 @@
-use crate::compiler::tokeniser::{Token, TokenType, Tokeniser};
+use crate::tokeniser::{Token, TokenType, Tokeniser};
 
 pub struct Schema {
     pub nuggets: Vec<Nugget>,

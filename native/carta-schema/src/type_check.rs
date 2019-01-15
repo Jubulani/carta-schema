@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::compiler::builtin_types;
-use crate::compiler::parser::{Nugget, NuggetStructDefn, NuggetTypeRef, Schema};
+use crate::builtin_types;
+use crate::parser::{Nugget, NuggetStructDefn, NuggetTypeRef, Schema};
 
 pub struct TSchema {
     pub nuggets: Vec<Nugget>,

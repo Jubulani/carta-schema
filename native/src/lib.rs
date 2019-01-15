@@ -1,5 +1,3 @@
-mod compiler;
-
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -127,7 +125,7 @@ fn init(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 fn compile_schema_file(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    compiler::compile_schema_file("schema.carta");
+    carta_schema::compile_schema_file("schema.carta");
     Ok(cx.undefined())
 }
 
