@@ -14,7 +14,7 @@ make
 make install DESTDIR=../../kcov-build
 cd ../..
 rm -rf kcov-master
-FILENAME=$(find | grep "native/target/debug/carta_schema")
+FILENAME=$(find | grep -E "^./native/target/debug/carta_schema-[a-f0-9]+$")
 echo "Found test executable: ${FILENAME}"
 ./kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "native/target/cov/" "${FILENAME}"
 bash <(curl -s https://codecov.io/bash)
