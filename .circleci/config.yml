@@ -33,20 +33,7 @@ jobs:
       - checkout
       - run: cd native/carta-schema && cargo build
       - run: sudo apt-get install -y libcurl4-openssl-dev libelf-dev libdw-dev cmake gcc binutils-dev libiberty-dev
-      - run: |
-          wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
-          tar xzf master.tar.gz &&
-          cd kcov-master &&
-          mkdir build &&
-          cd build &&
-          cmake .. &&
-          make &&
-          make install DESTDIR=../../kcov-build &&
-          cd ../.. &&
-          rm -rf kcov-master &&
-          for file in native/target/debug/carta_schema-*[^\.d]; do mkdir -p "native/target/cov/$(basename $file)"; ./kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "native/target/cov/$(basename $file)" "$file"; done &&
-          bash <(curl -s https://codecov.io/bash) &&
-          echo "Uploaded code coverage"
+      - run: ./coverage.sh
 
 workflows:
   version: 2
