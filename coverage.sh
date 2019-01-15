@@ -4,13 +4,6 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-bash --version
-find --version
-grep --version
-
-echo "List files:"
-find
-
 wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz
 tar xzf master.tar.gz
 cd kcov-master

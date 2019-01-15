@@ -31,7 +31,7 @@ jobs:
     working_directory: ~/carta
     steps:
       - checkout
-      - run: cd native/carta-schema && cargo build
+      - run: cd native/carta-schema && cargo test --no-run
       - run: sudo apt-get install -y libcurl4-openssl-dev libelf-dev libdw-dev cmake gcc binutils-dev libiberty-dev
       - run: ./coverage.sh
 
