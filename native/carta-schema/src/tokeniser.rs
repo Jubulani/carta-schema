@@ -48,7 +48,6 @@ pub struct Tokeniser {
 }
 
 impl Tokeniser {
-
     /// Iterate over the input by character, and generate a list of output tokens
     pub fn new(data: &str) -> Tokeniser {
         let mut tokens: Vec<Token> = Vec::new();
@@ -65,7 +64,7 @@ impl Tokeniser {
         Tokeniser { tokens }
     }
 
-    pub fn iter<'a>(&'a self) -> Iter<'a> {
+    pub fn iter(&self) -> Iter {
         Iter {
             inner: self,
             pos: 0,
@@ -134,20 +133,19 @@ impl WordState {
 
 impl TokeniserState for WordState {
     fn new_char(mut self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn TokeniserState> {
-
         // Accept the token, and add it to the saved token value
         if c.is_alphabetic() || c.is_numeric() || c == '_' {
             self.value.push(c);
-            return self;
+            self
         } else {
             // Otherwise, the next character is not a valid word character.  Emit the Word found so far,
             // and continue processing the input character as a potential new unknown token.
             tokens.push(self.get_token().unwrap());
 
             if let Some(s) = new_state(c, tokens) {
-                return s;
+                s
             } else {
-                return Box::new(EmptyState {});
+                Box::new(EmptyState {})
             }
         }
     }
@@ -336,11 +334,13 @@ mod test {
 
     #[test]
     fn test_basic_struct() {
-        let tok = Tokeniser::new("
+        let tok = Tokeniser::new(
+            "
         struct new_type {
             val1: type1,
             val2: type2
-        }");
+        }",
+        );
         let mut iter = tok.iter();
         assert_eq!(
             iter.next(),

@@ -37,9 +37,7 @@ fn check_all_types_defined(types_map: &HashMap<String, NuggetStructDefn>) {
     // check that they've all been defined.
     for kind in types_map.values() {
         for member in &kind.members {
-            let typename = match &member.kind {
-                NuggetTypeRef::TypeName(s) => s,
-            };
+            let NuggetTypeRef::TypeName(typename) = &member.kind;
             if !builtin_types::is_builtin_type(&typename)
                 && types_map.get::<str>(&typename).is_none()
             {
@@ -69,9 +67,7 @@ fn check_types_no_loops(types_map: &HashMap<String, NuggetStructDefn>) {
     for kind in types_map.values() {
         let mut all_builtin = true;
         for member in &kind.members {
-            let typename = match &member.kind {
-                NuggetTypeRef::TypeName(s) => s,
-            };
+            let NuggetTypeRef::TypeName(typename) = &member.kind;
             if !builtin_types::is_builtin_type(&typename)
                 && types_resolved.get::<str>(&typename).is_none()
             {
@@ -87,12 +83,9 @@ fn check_types_no_loops(types_map: &HashMap<String, NuggetStructDefn>) {
             }
         }
 
-        match all_builtin {
-            true => {
-                types_resolved.insert(&kind.name);
-                types_stack.push(&kind.name);
-            }
-            false => {}
+        if all_builtin {
+            types_resolved.insert(&kind.name);
+            types_stack.push(&kind.name);
         }
     }
 
@@ -108,9 +101,7 @@ fn check_types_no_loops(types_map: &HashMap<String, NuggetStructDefn>) {
 
                 let mut all_resolved = true;
                 for member in &parent.members {
-                    let typename = match &member.kind {
-                        NuggetTypeRef::TypeName(s) => s,
-                    };
+                    let NuggetTypeRef::TypeName(typename) = &member.kind;
                     if !builtin_types::is_builtin_type(&typename)
                         && types_resolved.get::<str>(&typename).is_none()
                     {
@@ -134,7 +125,7 @@ fn check_types_no_loops(types_map: &HashMap<String, NuggetStructDefn>) {
             recursive_types.push(&kind.name);
         }
     }
-    if recursive_types.len() > 0 {
+    if !recursive_types.is_empty() {
         panic!("Recursive types detected with types: {:?}", recursive_types);
     }
 }
@@ -148,11 +139,9 @@ fn check_types(types: Vec<NuggetStructDefn>) -> HashMap<String, NuggetStructDefn
 }
 
 // Check that all nugget types have been defined
-fn check_nuggets(nuggets: &Vec<Nugget>, types_map: &HashMap<String, NuggetStructDefn>) {
+fn check_nuggets(nuggets: &[Nugget], types_map: &HashMap<String, NuggetStructDefn>) {
     for nugget in nuggets.iter() {
-        let typename = match &nugget.kind {
-            NuggetTypeRef::TypeName(s) => s,
-        };
+        let NuggetTypeRef::TypeName(typename) = &nugget.kind;
         if !types_map.contains_key::<str>(&typename) {
             panic!("Unknown type name: {}", &typename);
         }

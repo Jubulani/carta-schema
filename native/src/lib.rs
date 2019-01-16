@@ -43,7 +43,7 @@ struct FileData {
 // See: https://users.rust-lang.org/t/neon-electron-undefined-symbol-cxa-pure-virtual/21223
 #[no_mangle]
 pub extern "C" fn __cxa_pure_virtual() {
-    loop {}
+    panic!("Unexpected call to __cxa_pure_virtual");
 }
 
 fn get_global_program_data() -> &'static mut ProgramData {
@@ -53,11 +53,11 @@ fn get_global_program_data() -> &'static mut ProgramData {
 }
 
 fn read_file(filename: &str) -> FileData {
-    let mut f = File::open(filename).expect(&format!("File not found: {}", filename));
+    let mut f = File::open(filename).unwrap_or_else(|_| panic!("File not found: {}", filename));
     let mut buffer = Vec::new();
 
     f.read_to_end(&mut buffer)
-        .expect(&format!("Error reading file: {}", filename));
+        .unwrap_or_else(|_| panic!("Error reading file: {}", filename));
 
     FileData { buffer }
 }
@@ -90,14 +90,14 @@ fn get_binary_data(mut cx: FunctionContext) -> JsResult<JsArray> {
     debug!("Num elements: {}", num_elems);
 
     let program_data = get_global_program_data();
-    let file_data = program_data.file_data.get(&handle).unwrap();
+    let file_data = &program_data.file_data[&handle];
 
     let num_elems = std::cmp::min(num_elems, file_data.buffer.len());
 
     let js_array = JsArray::new(&mut cx, num_elems as u32);
 
     for i in 0..num_elems {
-        let js_number = cx.number(file_data.buffer[i] as f64);
+        let js_number = cx.number(f64::from(file_data.buffer[i]));
         js_array.set(&mut cx, i as u32, js_number).unwrap();
     }
 
