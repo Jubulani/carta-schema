@@ -14,6 +14,6 @@
   },
   "scripts": {
     "install": "neon build --release",
-    "test": "cd native && cargo test --release --all"
+    "test": "cd native && cargo test --release && cd carta-schema && cargo test"
   }
 }
