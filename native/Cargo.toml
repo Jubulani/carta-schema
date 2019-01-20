@@ -20,5 +20,3 @@ neon = "0.2.0"
 simplelog = "^0.5.0"
 carta-schema = { path = 'carta-schema' }
 
-[workspace]
-members = ["carta-schema"]
