@@ -6,32 +6,21 @@ version: 2
 jobs:
   build_and_test:
     docker:
-      - image: circleci/rust:1.31-node
+      - image: circleci/rust:1.32
     working_directory: ~/carta
     steps:
       - checkout
-      # Download and cache dependencies
-      - restore_cache:
-          keys:
-          - v1-dependencies-{{ checksum "package.json" }}
-          # fallback to using the latest cache if no exact match is found
-          - v1-dependencies-
-      - run: yarn install
-      - save_cache:
-          paths:
-            - node_modules
-          key: v1-dependencies-{{ checksum "package.json" }}
-      - run: yarn test
+	  - run: cargo test
 
   coverage:
     docker:
-      - image: circleci/rust:1.31-node
+      - image: circleci/rust:1.32
     environment:
       - RUSTFLAGS: -C link-dead-code
     working_directory: ~/carta
     steps:
       - checkout
-      - run: cd native/carta-schema && cargo test --no-run
+      - run: cargo test --no-run
       - run: sudo apt-get install -y libcurl4-openssl-dev libelf-dev libdw-dev cmake gcc binutils-dev libiberty-dev
       - run: ./coverage.sh
 

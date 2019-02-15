@@ -1,0 +1,5 @@
+[workspace]
+members = [
+	"carta-schema"
+]
+
