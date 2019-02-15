@@ -10,7 +10,7 @@ jobs:
     working_directory: ~/carta
     steps:
       - checkout
-    - run: cargo test
+      - run: cargo test
 
   coverage:
     docker:
