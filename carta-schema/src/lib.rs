@@ -17,12 +17,16 @@
  */
 
 mod builtin_types;
+mod error;
 mod parser;
 mod tokeniser;
 mod type_check;
 
-pub fn compile_schema_file(data: &str) {
+use error::CartaError;
+
+pub fn compile_schema_file(data: &str) -> Result<(), CartaError> {
     let tokeniser = tokeniser::Tokeniser::new(&data);
     let schema = parser::compile_schema(&tokeniser);
-    type_check::type_check_schema(schema);
+    type_check::type_check_schema(schema)?;
+    Ok(())
 }

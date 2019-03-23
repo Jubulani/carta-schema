@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::builtin_types;
+use crate::error::CartaError;
 use crate::parser::{Nugget, NuggetStructDefn, NuggetTypeRef, Schema};
 
 pub struct TSchema {
@@ -8,14 +9,14 @@ pub struct TSchema {
     pub types: HashMap<String, NuggetStructDefn>,
 }
 
-pub fn type_check_schema(schema: Schema) -> TSchema {
+pub fn type_check_schema(schema: Schema) -> Result<TSchema, CartaError> {
     let Schema { nuggets, types } = schema;
 
-    let types = check_types(types);
+    let types = check_types(types)?;
 
     check_nuggets(&nuggets, &types);
 
-    TSchema { nuggets, types }
+    Ok(TSchema { nuggets, types })
 }
 
 fn build_types_map(types: Vec<NuggetStructDefn>) -> HashMap<String, NuggetStructDefn> {
@@ -32,7 +33,9 @@ fn build_types_map(types: Vec<NuggetStructDefn>) -> HashMap<String, NuggetStruct
     types_map
 }
 
-fn check_all_types_defined(types_map: &HashMap<String, NuggetStructDefn>) {
+fn check_all_types_defined(
+    types_map: &HashMap<String, NuggetStructDefn>,
+) -> Result<(), CartaError> {
     // All types are now stored in types_map.  We can now go over all members of all types, and
     // check that they've all been defined.
     for kind in types_map.values() {
@@ -41,10 +44,13 @@ fn check_all_types_defined(types_map: &HashMap<String, NuggetStructDefn>) {
             if !builtin_types::is_builtin_type(&typename)
                 && types_map.get::<str>(&typename).is_none()
             {
-                panic!("Undefined type: {}", typename);
+                return Err(CartaError);
+                //panic!("Undefined type: {}", typename);
             }
         }
     }
+
+    Ok(())
 }
 
 /// Check that there are no types that recursively depend on themselves.
@@ -130,12 +136,14 @@ fn check_types_no_loops(types_map: &HashMap<String, NuggetStructDefn>) {
     }
 }
 
-fn check_types(types: Vec<NuggetStructDefn>) -> HashMap<String, NuggetStructDefn> {
+fn check_types(
+    types: Vec<NuggetStructDefn>,
+) -> Result<HashMap<String, NuggetStructDefn>, CartaError> {
     let types_map = build_types_map(types);
-    check_all_types_defined(&types_map);
+    check_all_types_defined(&types_map)?;
     check_types_no_loops(&types_map);
 
-    types_map
+    Ok(types_map)
 }
 
 // Check that all nugget types have been defined
