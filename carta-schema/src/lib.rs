@@ -21,11 +21,8 @@ mod parser;
 mod tokeniser;
 mod type_check;
 
-use std::fs;
-
-pub fn compile_schema_file(filename: &str) {
-    let s = fs::read_to_string(filename).unwrap();
-    let tokeniser = tokeniser::Tokeniser::new(&s);
+pub fn compile_schema_file(data: &str) {
+    let tokeniser = tokeniser::Tokeniser::new(&data);
     let schema = parser::compile_schema(&tokeniser);
     type_check::type_check_schema(schema);
 }
