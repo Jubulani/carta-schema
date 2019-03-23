@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use std::fmt::Debug;
+
 use crate::builtin_types;
 use crate::error::CartaError;
 use crate::parser::{Nugget, NuggetStructDefn, NuggetTypeRef, Schema};
@@ -15,23 +17,24 @@ pub fn type_check_schema(schema: Schema) -> Result<TSchema, CartaError> {
 
     let types = check_types(types)?;
 
-    check_nuggets(&nuggets, &types);
+    check_nuggets(&nuggets, &types)?;
 
     Ok(TSchema { nuggets, types })
 }
 
-fn build_types_map(types: Vec<NuggetStructDefn>) -> HashMap<String, NuggetStructDefn> {
+fn build_types_map(
+    types: Vec<NuggetStructDefn>,
+) -> Result<HashMap<String, NuggetStructDefn>, CartaError> {
     let mut types_map: HashMap<String, NuggetStructDefn> = HashMap::new();
 
     for kind in types.into_iter() {
         if types_map.contains_key::<str>(&kind.name) {
-            panic!("Duplicate definition of type: {}", &kind.name);
+            return Err(CartaError::DuplicateType(kind.name));
         }
         types_map.insert(kind.name.clone(), kind);
-        //ret.push(kind);
     }
 
-    types_map
+    Ok(types_map)
 }
 
 fn check_all_types_defined(
@@ -45,8 +48,7 @@ fn check_all_types_defined(
             if !builtin_types::is_builtin_type(&typename)
                 && types_map.get::<str>(&typename).is_none()
             {
-                return Err(CartaError);
-                //panic!("Undefined type: {}", typename);
+                return Err(CartaError::UnknownType(typename.to_string()));
             }
         }
     }
@@ -55,7 +57,7 @@ fn check_all_types_defined(
 }
 
 /// Check that there are no types that recursively depend on themselves.
-fn check_types_no_loops(types_map: &HashMap<String, NuggetStructDefn>) {
+fn check_types_no_loops(types_map: &HashMap<String, NuggetStructDefn>) -> Result<(), CartaError> {
     // Set of all types that have been fully resolved to depend only on builtin types, or
     // other types that depend transitively on only built-in types.
     // Hopefully we can eventually add all the types to this set.  If we can't, there must be a loop
@@ -103,6 +105,8 @@ fn check_types_no_loops(types_map: &HashMap<String, NuggetStructDefn>) {
             for parent in parents.iter() {
                 let parent = match types_map.get::<str>(parent) {
                     Some(p) => p,
+                    // Should not be possible for this to happen, as we've previously called
+                    // check_all_types_defined to check that all types are known.
                     None => panic!("Unresolved type: {:?}", parent),
                 };
 
@@ -129,32 +133,38 @@ fn check_types_no_loops(types_map: &HashMap<String, NuggetStructDefn>) {
     let mut recursive_types = Vec::new();
     for kind in types_map.values() {
         if types_resolved.get::<str>(&kind.name).is_none() {
-            recursive_types.push(&kind.name);
+            recursive_types.push(kind.name.clone());
         }
     }
     if !recursive_types.is_empty() {
-        panic!("Recursive types detected with types: {:?}", recursive_types);
+        return Err(CartaError::RecursiveTypes(recursive_types));
     }
+
+    Ok(())
 }
 
 fn check_types(
     types: Vec<NuggetStructDefn>,
 ) -> Result<HashMap<String, NuggetStructDefn>, CartaError> {
-    let types_map = build_types_map(types);
+    let types_map = build_types_map(types)?;
     check_all_types_defined(&types_map)?;
-    check_types_no_loops(&types_map);
+    check_types_no_loops(&types_map)?;
 
     Ok(types_map)
 }
 
 // Check that all nugget types have been defined
-fn check_nuggets(nuggets: &[Nugget], types_map: &HashMap<String, NuggetStructDefn>) {
+fn check_nuggets(
+    nuggets: &[Nugget],
+    types_map: &HashMap<String, NuggetStructDefn>,
+) -> Result<(), CartaError> {
     for nugget in nuggets.iter() {
         let NuggetTypeRef::TypeName(typename) = &nugget.kind;
         if !types_map.contains_key::<str>(&typename) {
-            panic!("Unknown type name: {}", &typename);
+            return Err(CartaError::UnknownType(typename.to_string()));
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -172,6 +182,18 @@ mod test {
         NuggetStructDefn {
             name: name.to_string(),
             members: nuggets,
+        }
+    }
+
+    // Compare two vectors, where element order doesn't matter
+    fn compare_vec_unordered<T: PartialEq + Debug>(a: Vec<T>, b: Vec<T>) {
+        if a.len() != b.len() {
+            panic!("{:?} != {:?}", &a, &b);
+        }
+        for elem in &a {
+            if !b.contains(&elem) {
+                panic!("{:?} != {:?}", a, b);
+            }
         }
     }
 
@@ -205,8 +227,7 @@ mod test {
     }
 
     #[test]
-    //#[should_panic(expected = "Undefined type: type2")]
-    fn test_undefined_type() -> Result<(), CartaError> {
+    fn test_undefined_type() {
         let t1 = build_type(
             "type1",
             vec![
@@ -219,12 +240,10 @@ mod test {
             types: vec![t1],
         };
         let res = type_check_schema(schema);
-        assert_eq!(res, Err(CartaError));
-        Ok(())
+        assert_eq!(res, Err(CartaError::UnknownType("type2".to_string())));
     }
 
     #[test]
-    #[should_panic(expected = "Recursive types detected")]
     fn test_type_loop() {
         let t1 = build_type(
             "type1",
@@ -244,7 +263,12 @@ mod test {
             nuggets: vec![build_nugget("name1", "type1")],
             types: vec![t1, t2],
         };
-        type_check_schema(schema);
+        let res = type_check_schema(schema);
+        if let Err(CartaError::RecursiveTypes(data)) = res {
+            compare_vec_unordered(data, vec!["type1".to_string(), "type2".to_string()])
+        } else {
+            panic!("Unexpected value: {:?}", res);
+        }
     }
 
     #[test]
@@ -282,7 +306,6 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Recursive types detected")]
     fn test_type_loop_long_chain() {
         let t1 = build_type(
             "type1",
@@ -339,11 +362,24 @@ mod test {
             nuggets: vec![],
             types: vec![t1, t2, t3, t4, t5, t6, t7],
         };
-        type_check_schema(schema);
+        let res = type_check_schema(schema);
+        if let Err(CartaError::RecursiveTypes(data)) = res {
+            compare_vec_unordered(
+                data,
+                vec![
+                    "type2".to_string(),
+                    "type3".to_string(),
+                    "type7".to_string(),
+                    "type1".to_string(),
+                    "type4".to_string(),
+                ],
+            )
+        } else {
+            panic!("Unexpected value: {:?}", res);
+        }
     }
 
     #[test]
-    #[should_panic(expected = "Duplicate definition of type: type1")]
     fn test_duplicate_types() {
         let t1 = build_type(
             "type1",
@@ -357,11 +393,11 @@ mod test {
             nuggets: vec![build_nugget("name1", "type1")],
             types: vec![t1, t2],
         };
-        type_check_schema(schema);
+        let res = type_check_schema(schema);
+        assert_eq!(res, Err(CartaError::DuplicateType("type1".to_string())));
     }
 
     #[test]
-    #[should_panic(expected = "Recursive types detected with types: [\"type1\"]")]
     fn test_recursive_type() {
         let t1 = build_type(
             "type1",
@@ -374,11 +410,15 @@ mod test {
             nuggets: vec![build_nugget("name1", "type1")],
             types: vec![t1],
         };
-        type_check_schema(schema);
+        let res = type_check_schema(schema);
+        assert_eq!(
+            res,
+            Err(CartaError::RecursiveTypes(vec!["type1".to_string()]))
+        );
     }
 
     #[test]
-    #[should_panic(expected = "Unknown type name: bad_type")]
+    //#[should_panic(expected = "Unknown type name: bad_type")]
     fn test_nugget_bad_typename() {
         let t1 = build_type(
             "type1",
@@ -391,6 +431,7 @@ mod test {
             nuggets: vec![build_nugget("name1", "bad_type")],
             types: vec![t1],
         };
-        type_check_schema(schema);
+        let res = type_check_schema(schema);
+        assert_eq!(res, Err(CartaError::UnknownType("bad_type".to_string())));
     }
 }
