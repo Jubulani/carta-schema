@@ -1,3 +1,4 @@
+use crate::error::CartaError;
 use crate::tokeniser::{Token, TokenType, Tokeniser};
 
 pub struct Schema {
@@ -33,17 +34,25 @@ pub struct NuggetStructDefn {
 }
 
 trait CompilerState {
-    fn new_token(self: Box<Self>, t: &Token, schema: &mut Schema) -> Box<dyn CompilerState>;
+    fn new_token(
+        self: Box<Self>,
+        t: Token,
+        schema: &mut Schema,
+    ) -> Result<Box<dyn CompilerState>, CartaError>;
 }
 
 struct EmptyState;
 
 impl CompilerState for EmptyState {
-    fn new_token(self: Box<Self>, t: &Token, _: &mut Schema) -> Box<dyn CompilerState> {
-        if let Some(s) = new_state(t) {
-            return s;
+    fn new_token(
+        self: Box<Self>,
+        t: Token,
+        _: &mut Schema,
+    ) -> Result<Box<dyn CompilerState>, CartaError> {
+        if let Some(s) = new_state(t)? {
+            return Ok(s);
         }
-        self
+        Ok(self)
     }
 }
 
@@ -61,34 +70,38 @@ enum NewNuggetSubState {
 }
 
 impl NewNuggetState {
-    fn new(t: &Token) -> NewNuggetState {
+    fn new(t: Token) -> NewNuggetState {
         NewNuggetState {
             state: NewNuggetSubState::Name,
-            name: t.value().to_string(),
+            name: t.value,
             kind: None,
         }
     }
 }
 
 impl CompilerState for NewNuggetState {
-    fn new_token(mut self: Box<Self>, t: &Token, schema: &mut Schema) -> Box<dyn CompilerState> {
+    fn new_token(
+        mut self: Box<Self>,
+        t: Token,
+        schema: &mut Schema,
+    ) -> Result<Box<dyn CompilerState>, CartaError> {
         match self.state {
             NewNuggetSubState::Name => {
                 // Next state must be TypeOf
                 if t.kind != TokenType::TypeOf {
-                    panic!("Expected ':', got: {:?}", t);
+                    return Err(CartaError::ParseError(":".to_string(), t.value));
                 }
                 self.state = NewNuggetSubState::TypeOf;
             }
             NewNuggetSubState::TypeOf => {
                 // Next state must be the type name
-                self.kind = Some(NuggetTypeRef::TypeName(t.value().to_string()));
+                self.kind = Some(NuggetTypeRef::TypeName(t.value));
                 self.state = NewNuggetSubState::Kind;
             }
             NewNuggetSubState::Kind => {
                 // Next state must be a newline
                 if t.kind != TokenType::NewLine {
-                    panic!("Expected '\n', got: {:?}", t);
+                    return Err(CartaError::ParseError("<newline>".to_string(), t.value));
                 }
 
                 if let Some(kind) = self.kind {
@@ -97,14 +110,14 @@ impl CompilerState for NewNuggetState {
                         kind,
                     };
                     schema.add_nugget(nugget);
-                    return Box::new(EmptyState);
+                    return Ok(Box::new(EmptyState));
                 } else {
                     panic!("Kind not available");
                 }
             }
         }
 
-        self
+        Ok(self)
     }
 }
 
@@ -137,24 +150,28 @@ impl StructState {
 }
 
 impl CompilerState for StructState {
-    fn new_token(mut self: Box<Self>, t: &Token, schema: &mut Schema) -> Box<dyn CompilerState> {
+    fn new_token(
+        mut self: Box<Self>,
+        t: Token,
+        schema: &mut Schema,
+    ) -> Result<Box<dyn CompilerState>, CartaError> {
         // New lines are ignored in struct definitions
         if t.kind == TokenType::NewLine {
-            return self;
+            return Ok(self);
         }
 
         match self.state {
             StructSubState::Begin => {
                 if t.kind != TokenType::Word {
-                    panic!("Expected name, got: {:?}", t);
+                    return Err(CartaError::ParseError("<name>".to_string(), t.value));
                 }
-                self.name = Some(t.value().to_string());
+                self.name = Some(t.value);
                 self.state = StructSubState::Name;
             }
             StructSubState::Name => {
                 // Next state must be OpenBrace
                 if t.kind != TokenType::OpenBrace {
-                    panic!("Expected '{{', got: {:?}", t);
+                    return Err(CartaError::ParseError("{{".to_string(), t.value));
                 }
                 self.state = StructSubState::OpenBrace;
             }
@@ -166,27 +183,27 @@ impl CompilerState for StructState {
                         members: self.complete_children,
                     };
                     schema.add_struct(defn);
-                    return Box::new(EmptyState {});
+                    return Ok(Box::new(EmptyState {}));
                 }
                 TokenType::Word => {
-                    self.new_child_name = Some(t.value().to_string());
+                    self.new_child_name = Some(t.value);
                     self.state = StructSubState::ChildName;
                 }
-                _ => panic!("Expected '}}' or name, got: {:?}", t),
+                _ => return Err(CartaError::ParseError("}}".to_string(), t.value)),
             },
             StructSubState::ChildName => {
                 // Next state must be TypeOf
                 if t.kind != TokenType::TypeOf {
-                    panic!("Expected ':', got: {:?}", t);
+                    return Err(CartaError::ParseError(":".to_string(), t.value));
                 }
                 self.state = StructSubState::ChildTypeOf;
             }
             StructSubState::ChildTypeOf => {
                 // Next state must be a typename
                 if t.kind != TokenType::Word {
-                    panic!("Expected type name, got: {:?}", t);
+                    return Err(CartaError::ParseError("<type name>".to_string(), t.value));
                 }
-                let kind = t.value().to_string();
+                let kind = t.value;
                 self.complete_children.push(Nugget {
                     name: self.new_child_name.take().unwrap(),
                     kind: NuggetTypeRef::TypeName(kind),
@@ -196,50 +213,53 @@ impl CompilerState for StructState {
             StructSubState::ChildKind => {
                 // Next state must be Comma
                 if t.kind != TokenType::Comma {
-                    panic!("Expected ',', got: {:?}", t);
+                    return Err(CartaError::ParseError(",".to_string(), t.value));
                 }
                 self.state = StructSubState::OpenBrace;
             }
         }
 
-        self
+        Ok(self)
     }
 }
 
-fn new_state(t: &Token) -> Option<Box<dyn CompilerState>> {
+fn new_state(t: Token) -> Result<Option<Box<dyn CompilerState>>, CartaError> {
     if t.kind == TokenType::Word {
         // Match against language keywords
-        return match t.value() {
-            "struct" => Some(Box::new(StructState::new())),
+        return match &*t.value {
+            "struct" => Ok(Some(Box::new(StructState::new()))),
 
             // If not a keyword, must be a new nugget name
-            _ => Some(Box::new(NewNuggetState::new(t))),
+            _ => Ok(Some(Box::new(NewNuggetState::new(t)))),
         };
     } else if t.kind == TokenType::NewLine {
         // Empty newline - nothing to parse
-        return None;
+        return Ok(None);
     }
 
-    panic!("Unknown token: {:?}", t);
+    return Err(CartaError::ParseError("<name>".to_string(), t.value));
 }
 
-pub fn compile_schema(tokeniser: &Tokeniser) -> Schema {
+pub fn compile_schema(tokeniser: Tokeniser) -> Result<Schema, CartaError> {
     let mut schema = Schema {
         nuggets: Vec::new(),
         types: Vec::new(),
     };
     let mut state: Box<dyn CompilerState> = Box::new(EmptyState {});
-    for token in tokeniser.iter() {
-        state = state.new_token(token, &mut schema);
+    for token in tokeniser.into_iter() {
+        state = state.new_token(token, &mut schema)?;
     }
 
     // Add a final newline, in case one doesn't exist in the input
     // This will flush any remaining (valid) nuggets
-    state.new_token(&Token::new(TokenType::NewLine, None), &mut schema);
+    state.new_token(
+        Token::new(TokenType::NewLine, "\n".to_string()),
+        &mut schema,
+    )?;
 
     // TODO: Handle incomplete nuggets still remaining.
 
-    schema
+    Ok(schema)
 }
 
 #[cfg(test)]
@@ -247,9 +267,9 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_basic_builtin() {
-        let tokeniser = Tokeniser::new("new_name: uint64_le");
-        let schema = compile_schema(&tokeniser);
+    fn test_basic_builtin() -> Result<(), CartaError> {
+        let tokeniser = Tokeniser::new("new_name: uint64_le")?;
+        let schema = compile_schema(tokeniser)?;
         let mut iter = schema.nuggets.iter();
         assert_eq!(
             iter.next(),
@@ -259,33 +279,36 @@ mod test {
             })
         );
         assert_eq!(iter.next(), None);
+        Ok(())
     }
 
     #[test]
-    fn test_empty_input() {
-        let tokeniser = Tokeniser::new("");
-        let schema = compile_schema(&tokeniser);
+    fn test_empty_input() -> Result<(), CartaError> {
+        let tokeniser = Tokeniser::new("")?;
+        let schema = compile_schema(tokeniser)?;
         let mut iter = schema.nuggets.iter();
         assert_eq!(iter.next(), None);
+        Ok(())
     }
 
     #[test]
-    fn test_whitespace_input() {
-        let tokeniser = Tokeniser::new("\n  \t\n\n");
-        let schema = compile_schema(&tokeniser);
+    fn test_whitespace_input() -> Result<(), CartaError> {
+        let tokeniser = Tokeniser::new("\n  \t\n\n")?;
+        let schema = compile_schema(tokeniser)?;
         let mut iter = schema.nuggets.iter();
         assert_eq!(iter.next(), None);
+        Ok(())
     }
 
     #[test]
-    fn test_multiple_builtins() {
+    fn test_multiple_builtins() -> Result<(), CartaError> {
         let tokeniser = Tokeniser::new(
             "name1: int8
             name2: uint64_be
             name3: f64_le
         ",
-        );
-        let schema = compile_schema(&tokeniser);
+        )?;
+        let schema = compile_schema(tokeniser)?;
         let mut iter = schema.nuggets.iter();
         assert_eq!(
             iter.next(),
@@ -309,18 +332,19 @@ mod test {
             })
         );
         assert_eq!(iter.next(), None);
+        Ok(())
     }
 
     #[test]
-    fn test_new_type() {
+    fn test_new_type() -> Result<(), CartaError> {
         let tokeniser = Tokeniser::new(
             "struct new_type {
                 inner_val1: int8,
                 inner_val2: int8,
             }
             val: new_type",
-        );
-        let schema = compile_schema(&tokeniser);
+        )?;
+        let schema = compile_schema(tokeniser)?;
         let mut iter = schema.nuggets.iter();
         assert_eq!(
             iter.next(),
@@ -349,5 +373,6 @@ mod test {
             })
         );
         assert_eq!(types_iter.next(), None);
+        Ok(())
     }
 }

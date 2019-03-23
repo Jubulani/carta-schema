@@ -25,8 +25,8 @@ mod type_check;
 use error::CartaError;
 
 pub fn compile_schema_file(data: &str) -> Result<(), CartaError> {
-    let tokeniser = tokeniser::Tokeniser::new(&data);
-    let schema = parser::compile_schema(&tokeniser);
+    let tokeniser = tokeniser::Tokeniser::new(&data)?;
+    let schema = parser::compile_schema(tokeniser)?;
     type_check::type_check_schema(schema)?;
     Ok(())
 }

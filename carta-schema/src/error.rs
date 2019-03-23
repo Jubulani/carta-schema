@@ -10,4 +10,10 @@ pub enum CartaError {
 
     #[fail(display = "Recursive types: {:?}", _0)]
     RecursiveTypes(Vec<String>),
+
+    #[fail(display = "Unrecognized symbol: {}", _0)]
+    UnknownSymbol(char),
+
+    #[fail(display = "Parse error!  Expected '{}', found '{}'", _0, _1)]
+    ParseError(String, String),
 }

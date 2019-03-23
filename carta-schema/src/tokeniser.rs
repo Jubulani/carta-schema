@@ -10,6 +10,8 @@
  * Tests at the end of the file show examples of tokens we get from various input strings.
  */
 
+use crate::error::CartaError;
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenType {
     Word,       // Start with _ or letter, can contain any number of _, letter or digit after that
@@ -23,37 +25,27 @@ pub enum TokenType {
 #[derive(PartialEq, Debug, Clone)]
 pub struct Token {
     pub kind: TokenType,
-    value: Option<String>,
+    pub value: String,
 }
 
 impl Token {
-    pub fn new(kind: TokenType, value: Option<String>) -> Token {
+    pub fn new(kind: TokenType, value: String) -> Token {
         Token { kind, value }
-    }
-
-    /**
-     * Get a token value.  Certain tokens (eg Word) must have a value, other tokens cannot.
-     */
-    pub fn value(&self) -> &str {
-        if let Some(val) = &self.value {
-            &val
-        } else {
-            panic!("Expected value from token: {:?}", self);
-        }
     }
 }
 
+#[derive(PartialEq, Debug)]
 pub struct Tokeniser {
     tokens: Vec<Token>,
 }
 
 impl Tokeniser {
     /// Iterate over the input by character, and generate a list of output tokens
-    pub fn new(data: &str) -> Tokeniser {
+    pub fn new(data: &str) -> Result<Tokeniser, CartaError> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut state: Box<dyn TokeniserState> = Box::new(EmptyState {});
         for c in data.chars() {
-            state = state.new_char(c, &mut tokens);
+            state = state.new_char(c, &mut tokens)?;
         }
 
         // Once we're done with the input, we may still be in the process of building a token.  If we are,
@@ -61,40 +53,22 @@ impl Tokeniser {
         if let Some(t) = state.get_token() {
             tokens.push(t);
         }
-        Tokeniser { tokens }
+        Ok(Tokeniser { tokens })
     }
 
-    pub fn iter(&self) -> Iter {
-        Iter {
-            inner: self,
-            pos: 0,
-        }
-    }
-}
-
-pub struct Iter<'a> {
-    inner: &'a Tokeniser,
-    pos: usize,
-}
-
-impl<'a> Iterator for Iter<'a> {
-    type Item = &'a Token;
-
-    fn next(&mut self) -> Option<&'a Token> {
-        if self.pos < self.inner.tokens.len() {
-            let t = &self.inner.tokens[self.pos];
-            self.pos += 1;
-            Some(t)
-        } else {
-            None
-        }
+    pub fn into_iter(self) -> std::vec::IntoIter<Token> {
+        self.tokens.into_iter()
     }
 }
 
 /// State machine to handle emitting tokens based on input
 trait TokeniserState {
     /// Process a new input character `c`.  Maybe emit token(s) by appending to `tokens`.  Return the next state.
-    fn new_char(self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn TokeniserState>;
+    fn new_char(
+        self: Box<Self>,
+        c: char,
+        tokens: &mut Vec<Token>,
+    ) -> Result<Box<dyn TokeniserState>, CartaError>;
 
     /// Get an incomplete token if one exists.  Used to get the last token when the input doesn't
     /// end with whitespace.
@@ -106,11 +80,15 @@ trait TokeniserState {
 struct EmptyState;
 
 impl TokeniserState for EmptyState {
-    fn new_char(self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn TokeniserState> {
-        if let Some(s) = new_state(c, tokens) {
-            return s;
+    fn new_char(
+        self: Box<Self>,
+        c: char,
+        tokens: &mut Vec<Token>,
+    ) -> Result<Box<dyn TokeniserState>, CartaError> {
+        if let Some(s) = new_state(c, tokens)? {
+            return Ok(s);
         }
-        self
+        Ok(self)
     }
 
     fn get_token(self: Box<Self>) -> Option<Token> {
@@ -132,67 +110,73 @@ impl WordState {
 }
 
 impl TokeniserState for WordState {
-    fn new_char(mut self: Box<Self>, c: char, tokens: &mut Vec<Token>) -> Box<dyn TokeniserState> {
+    fn new_char(
+        mut self: Box<Self>,
+        c: char,
+        tokens: &mut Vec<Token>,
+    ) -> Result<Box<dyn TokeniserState>, CartaError> {
         // Accept the token, and add it to the saved token value
         if c.is_alphabetic() || c.is_numeric() || c == '_' {
             self.value.push(c);
-            self
+            Ok(self)
         } else {
             // Otherwise, the next character is not a valid word character.  Emit the Word found so far,
             // and continue processing the input character as a potential new unknown token.
             tokens.push(self.get_token().unwrap());
 
-            if let Some(s) = new_state(c, tokens) {
-                s
+            if let Some(s) = new_state(c, tokens)? {
+                Ok(s)
             } else {
-                Box::new(EmptyState {})
+                Ok(Box::new(EmptyState {}))
             }
         }
     }
 
     fn get_token(self: Box<Self>) -> Option<Token> {
-        Some(Token::new(TokenType::Word, Some(self.value)))
+        Some(Token::new(TokenType::Word, self.value))
     }
 }
 
 /// Process a new input character with no current state.  Matched single-character tokens are
 /// emitted immediately, matched multi character tokens return the appropriate state.
-fn new_state(c: char, tokens: &mut Vec<Token>) -> Option<Box<dyn TokeniserState>> {
+fn new_state(
+    c: char,
+    tokens: &mut Vec<Token>,
+) -> Result<Option<Box<dyn TokeniserState>>, CartaError> {
     if c == '\n' {
-        tokens.push(Token::new(TokenType::NewLine, None));
-        return None;
+        tokens.push(Token::new(TokenType::NewLine, c.to_string()));
+        return Ok(None);
     }
 
     // Whitespace (except newlines) is only used for delimiting tokens.  Ignore it.
     if c.is_whitespace() {
-        return None;
+        return Ok(None);
     }
 
     // Word tokens start with a letter or underscore.
     if c.is_alphabetic() || c == '_' {
-        return Some(Box::new(WordState::new(c)));
+        return Ok(Some(Box::new(WordState::new(c))));
     }
 
     // No state needed
     if c == ':' {
-        tokens.push(Token::new(TokenType::TypeOf, None));
-        return None;
+        tokens.push(Token::new(TokenType::TypeOf, c.to_string()));
+        return Ok(None);
     }
     if c == '{' {
-        tokens.push(Token::new(TokenType::OpenBrace, None));
-        return None;
+        tokens.push(Token::new(TokenType::OpenBrace, c.to_string()));
+        return Ok(None);
     }
     if c == '}' {
-        tokens.push(Token::new(TokenType::CloseBrace, None));
-        return None;
+        tokens.push(Token::new(TokenType::CloseBrace, c.to_string()));
+        return Ok(None);
     }
     if c == ',' {
-        tokens.push(Token::new(TokenType::Comma, None));
-        return None;
+        tokens.push(Token::new(TokenType::Comma, c.to_string()));
+        return Ok(None);
     }
 
-    // TODO: Better error handling
-    panic!("Unknown symbol: {}", c);
+    Err(CartaError::UnknownSymbol(c))
 }
 
 #[cfg(test)]
@@ -200,252 +184,265 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_tokenise_word() {
-        let tok = Tokeniser::new("abc");
-        let mut iter = tok.iter();
+    fn test_tokenise_word() -> Result<(), CartaError> {
+        let tok = Tokeniser::new("abc")?;
+        let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("abc".to_string())
+                value: "abc".to_string()
             })
         );
         assert_eq!(iter.next(), None);
+        Ok(())
     }
 
     #[test]
-    fn test_space_at_start_plus_number() {
-        let tok = Tokeniser::new(" abc23");
-        let mut iter = tok.iter();
+    fn test_space_at_start_plus_number() -> Result<(), CartaError> {
+        let tok = Tokeniser::new(" abc23")?;
+        let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("abc23".to_string())
+                value: "abc23".to_string()
             })
         );
         assert_eq!(iter.next(), None);
+        Ok(())
     }
 
     #[test]
-    fn test_newline_at_start_plus_underscore() {
-        let tok = Tokeniser::new("\n_abc_abc");
-        let mut iter = tok.iter();
+    fn test_newline_at_start_plus_underscore() -> Result<(), CartaError> {
+        let tok = Tokeniser::new("\n_abc_abc")?;
+        let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::NewLine,
-                value: None
+                value: "\n".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("_abc_abc".to_string())
+                value: "_abc_abc".to_string()
             })
         );
         assert_eq!(iter.next(), None);
+        Ok(())
     }
 
     #[test]
-    fn test_whitespace_at_start_tab() {
-        let tok = Tokeniser::new("\tabc");
-        let mut iter = tok.iter();
+    fn test_whitespace_at_start_tab() -> Result<(), CartaError> {
+        let tok = Tokeniser::new("\tabc")?;
+        let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("abc".to_string())
+                value: "abc".to_string()
             })
         );
         assert_eq!(iter.next(), None);
+        Ok(())
     }
 
     #[test]
-    fn test_multiple_words() {
-        let tok = Tokeniser::new("abc def\nghi\tjkl ");
-        let mut iter = tok.iter();
+    fn test_multiple_words() -> Result<(), CartaError> {
+        let tok = Tokeniser::new("abc def\nghi\tjkl ")?;
+        let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("abc".to_string())
+                value: "abc".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("def".to_string())
+                value: "def".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::NewLine,
-                value: None
+                value: "\n".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("ghi".to_string())
+                value: "ghi".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("jkl".to_string())
+                value: "jkl".to_string()
             })
         );
         assert_eq!(iter.next(), None);
+        Ok(())
     }
 
     #[test]
-    fn test_basic_typeof() {
-        let tok = Tokeniser::new("abc: uint64_le");
-        let mut iter = tok.iter();
+    fn test_basic_typeof() -> Result<(), CartaError> {
+        let tok = Tokeniser::new("abc: uint64_le")?;
+        let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("abc".to_string())
+                value: "abc".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::TypeOf,
-                value: None
+                value: ":".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("uint64_le".to_string())
+                value: "uint64_le".to_string()
             })
         );
         assert_eq!(iter.next(), None);
+        Ok(())
     }
 
     #[test]
-    fn test_basic_struct() {
+    fn test_basic_struct() -> Result<(), CartaError> {
         let tok = Tokeniser::new(
             "
         struct new_type {
             val1: type1,
             val2: type2
         }",
-        );
-        let mut iter = tok.iter();
+        )?;
+        let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::NewLine,
-                value: None
+                value: "\n".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("struct".to_string())
+                value: "struct".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("new_type".to_string())
+                value: "new_type".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::OpenBrace,
-                value: None
+                value: "{".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::NewLine,
-                value: None
+                value: "\n".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("val1".to_string())
+                value: "val1".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::TypeOf,
-                value: None
+                value: ":".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("type1".to_string())
+                value: "type1".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Comma,
-                value: None
+                value: ",".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::NewLine,
-                value: None
+                value: "\n".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("val2".to_string())
+                value: "val2".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::TypeOf,
-                value: None
+                value: ":".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::Word,
-                value: Some("type2".to_string())
+                value: "type2".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::NewLine,
-                value: None
+                value: "\n".to_string()
             })
         );
         assert_eq!(
             iter.next(),
-            Some(&Token {
+            Some(Token {
                 kind: TokenType::CloseBrace,
-                value: None
+                value: "}".to_string()
             })
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_unknown_token() {
+        let tok = Tokeniser::new("\tabc😃");
+        assert_eq!(tok, Err(CartaError::UnknownSymbol('😃')));
     }
 }

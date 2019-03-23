@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use std::fmt::Debug;
-
 use crate::builtin_types;
 use crate::error::CartaError;
 use crate::parser::{Nugget, NuggetStructDefn, NuggetTypeRef, Schema};
@@ -170,6 +168,7 @@ fn check_nuggets(
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::fmt::Debug;
 
     fn build_nugget(name: &str, typename: &str) -> Nugget {
         Nugget {
@@ -418,7 +417,6 @@ mod test {
     }
 
     #[test]
-    //#[should_panic(expected = "Unknown type name: bad_type")]
     fn test_nugget_bad_typename() {
         let t1 = build_type(
             "type1",
