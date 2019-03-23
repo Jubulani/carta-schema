@@ -4,6 +4,7 @@ use crate::builtin_types;
 use crate::error::CartaError;
 use crate::parser::{Nugget, NuggetStructDefn, NuggetTypeRef, Schema};
 
+#[derive(PartialEq, Debug)]
 pub struct TSchema {
     pub nuggets: Vec<Nugget>,
     pub types: HashMap<String, NuggetStructDefn>,
@@ -175,17 +176,18 @@ mod test {
     }
 
     #[test]
-    fn test_basic() {
+    fn test_basic() -> Result<(), CartaError> {
         let tnugget1 = build_nugget("inner1", "uint16_le");
         let schema = Schema {
             nuggets: vec![build_nugget("new_name", "type1")],
             types: vec![build_type("type1", vec![tnugget1])],
         };
-        type_check_schema(schema);
+        type_check_schema(schema)?;
+        Ok(())
     }
 
     #[test]
-    fn test_multi() {
+    fn test_multi() -> Result<(), CartaError> {
         let t1 = build_type(
             "type1",
             vec![
@@ -198,12 +200,13 @@ mod test {
             nuggets: vec![build_nugget("name1", "type1")],
             types: vec![t1, t2],
         };
-        type_check_schema(schema);
+        type_check_schema(schema)?;
+        Ok(())
     }
 
     #[test]
-    #[should_panic(expected = "Undefined type: type2")]
-    fn test_undefined_type() {
+    //#[should_panic(expected = "Undefined type: type2")]
+    fn test_undefined_type() -> Result<(), CartaError> {
         let t1 = build_type(
             "type1",
             vec![
@@ -215,7 +218,9 @@ mod test {
             nuggets: vec![build_nugget("name1", "type1")],
             types: vec![t1],
         };
-        type_check_schema(schema);
+        let res = type_check_schema(schema);
+        assert_eq!(res, Err(CartaError));
+        Ok(())
     }
 
     #[test]
@@ -243,7 +248,7 @@ mod test {
     }
 
     #[test]
-    fn test_many_types() {
+    fn test_many_types() -> Result<(), CartaError> {
         let t1 = build_type(
             "type1",
             vec![
@@ -272,7 +277,8 @@ mod test {
             nuggets: vec![build_nugget("name1", "type1")],
             types: vec![t1, t2, t3, t4, t5, t6],
         };
-        type_check_schema(schema);
+        type_check_schema(schema)?;
+        Ok(())
     }
 
     #[test]

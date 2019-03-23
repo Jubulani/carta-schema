@@ -1,5 +1,5 @@
 use failure_derive::Fail;
 
-#[derive(Fail, Debug)]
+#[derive(Fail, Debug, PartialEq)]
 #[fail(display = "Error!")]
 pub struct CartaError;
