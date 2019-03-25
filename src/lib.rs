@@ -30,3 +30,13 @@ pub fn compile_schema_file(data: &str) -> Result<(), CartaError> {
     type_check::type_check_schema(schema)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_basic_compile() -> Result<(), CartaError> {
+        compile_schema_file("new_name: int8")
+    }
+}

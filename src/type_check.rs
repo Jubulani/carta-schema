@@ -158,7 +158,7 @@ fn check_nuggets(
 ) -> Result<(), CartaError> {
     for nugget in nuggets.iter() {
         let NuggetTypeRef::TypeName(typename) = &nugget.kind;
-        if !types_map.contains_key::<str>(&typename) {
+        if !types_map.contains_key::<str>(&typename) && !builtin_types::is_builtin_type(&typename) {
             return Err(CartaError::UnknownType(typename.to_string()));
         }
     }
