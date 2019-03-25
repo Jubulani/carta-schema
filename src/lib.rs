@@ -23,12 +23,13 @@ mod tokeniser;
 mod type_check;
 
 use error::CartaError;
+use type_check::TSchema;
 
-pub fn compile_schema_file(data: &str) -> Result<(), CartaError> {
+pub fn compile_schema_file(data: &str) -> Result<TSchema, CartaError> {
     let tokeniser = tokeniser::Tokeniser::new(&data)?;
     let schema = parser::compile_schema(tokeniser)?;
-    type_check::type_check_schema(schema)?;
-    Ok(())
+    let tschema = type_check::type_check_schema(schema)?;
+    Ok(tschema)
 }
 
 #[cfg(test)]
@@ -36,7 +37,11 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_basic_compile() -> Result<(), CartaError> {
-        compile_schema_file("new_name: int8")
+    fn test_basic_compile() {
+        let res = compile_schema_file("new_name: int8");
+        match res {
+            Err(e) => panic!(e),
+            Ok(_) => (),
+        };
     }
 }
