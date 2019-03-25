@@ -1,6 +1,7 @@
 use crate::error::CartaError;
 use crate::tokeniser::{Token, TokenType, Tokeniser};
 
+#[derive(PartialEq, Debug)]
 pub struct Schema {
     pub nuggets: Vec<Nugget>,
     pub types: Vec<NuggetStructDefn>,
@@ -171,7 +172,7 @@ impl CompilerState for StructState {
             StructSubState::Name => {
                 // Next state must be OpenBrace
                 if t.kind != TokenType::OpenBrace {
-                    return Err(CartaError::ParseError("{{".to_string(), t.value));
+                    return Err(CartaError::ParseError("{".to_string(), t.value));
                 }
                 self.state = StructSubState::OpenBrace;
             }
@@ -189,7 +190,7 @@ impl CompilerState for StructState {
                     self.new_child_name = Some(t.value);
                     self.state = StructSubState::ChildName;
                 }
-                _ => return Err(CartaError::ParseError("}}".to_string(), t.value)),
+                _ => return Err(CartaError::ParseError("}".to_string(), t.value)),
             },
             StructSubState::ChildName => {
                 // Next state must be TypeOf
@@ -201,7 +202,7 @@ impl CompilerState for StructState {
             StructSubState::ChildTypeOf => {
                 // Next state must be a typename
                 if t.kind != TokenType::Word {
-                    return Err(CartaError::ParseError("<type name>".to_string(), t.value));
+                    return Err(CartaError::ParseError("<typename>".to_string(), t.value));
                 }
                 let kind = t.value;
                 self.complete_children.push(Nugget {
@@ -373,6 +374,137 @@ mod test {
             })
         );
         assert_eq!(types_iter.next(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_struct_syntax_errors() -> Result<(), CartaError> {
+        let tokeniser = Tokeniser::new(
+            "struct new_type {
+                inner_val1: int8,
+                inner_val2, int8,
+            }",
+        )?;
+        let ret = compile_schema(tokeniser);
+        assert_eq!(
+            ret,
+            Err(CartaError::ParseError(":".to_string(), ",".to_string()))
+        );
+
+        let tokeniser = Tokeniser::new(
+            "struct new_type {
+                inner_val1: int8,
+                inner_val2: int8,:
+            }",
+        )?;
+        let ret = compile_schema(tokeniser);
+        assert_eq!(
+            ret,
+            Err(CartaError::ParseError("}".to_string(), ":".to_string()))
+        );
+
+        let tokeniser = Tokeniser::new(
+            "struct {
+                inner_val1: int8,
+                inner_val2: int8,:
+            }",
+        )?;
+        let ret = compile_schema(tokeniser);
+        assert_eq!(
+            ret,
+            Err(CartaError::ParseError(
+                "<name>".to_string(),
+                "{".to_string()
+            ))
+        );
+
+        let tokeniser = Tokeniser::new(
+            "struct new_type
+                inner_val1: int8,
+                inner_val2: int8,:
+            }",
+        )?;
+        let ret = compile_schema(tokeniser);
+        assert_eq!(
+            ret,
+            Err(CartaError::ParseError(
+                "{".to_string(),
+                "inner_val1".to_string()
+            ))
+        );
+
+        let tokeniser = Tokeniser::new(
+            "struct new_type {
+                inner_val1: int8,
+                inner_val2: int8,:
+            }",
+        )?;
+        let ret = compile_schema(tokeniser);
+        assert_eq!(
+            ret,
+            Err(CartaError::ParseError("}".to_string(), ":".to_string()))
+        );
+
+        let tokeniser = Tokeniser::new(
+            "struct new_type {
+                inner_val1: ,
+                inner_val2: int8,
+            }",
+        )?;
+        let ret = compile_schema(tokeniser);
+        assert_eq!(
+            ret,
+            Err(CartaError::ParseError(
+                "<typename>".to_string(),
+                ",".to_string()
+            ))
+        );
+
+        let tokeniser = Tokeniser::new(
+            "struct new_type {
+                inner_val1: int8
+                inner_val2: int8,
+            }",
+        )?;
+        let ret = compile_schema(tokeniser);
+        assert_eq!(
+            ret,
+            Err(CartaError::ParseError(
+                ",".to_string(),
+                "inner_val2".to_string()
+            ))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_nugget_syntax_errors() -> Result<(), CartaError> {
+        let tokeniser = Tokeniser::new("name1, struct1")?;
+        let ret = compile_schema(tokeniser);
+        assert_eq!(
+            ret,
+            Err(CartaError::ParseError(":".to_string(), ",".to_string()))
+        );
+
+        let tokeniser = Tokeniser::new("name1: struct1,")?;
+        let ret = compile_schema(tokeniser);
+        assert_eq!(
+            ret,
+            Err(CartaError::ParseError(
+                "<newline>".to_string(),
+                ",".to_string()
+            ))
+        );
+
+        let tokeniser = Tokeniser::new(", struct1")?;
+        let ret = compile_schema(tokeniser);
+        assert_eq!(
+            ret,
+            Err(CartaError::ParseError(
+                "<name>".to_string(),
+                ",".to_string()
+            ))
+        );
         Ok(())
     }
 }
