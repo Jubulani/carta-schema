@@ -1,0 +1,26 @@
+// Png schema derived from https://www.w3.org/TR/PNG-Rationale.html
+sig: [byte] = [137, 80, 78, 71, 13, 10, 26, 10]
+
+struct header(name_val) {
+	name: [ascii; 4] = name_val,
+	required: bool = name[0] & 0x100,
+}
+
+struct generic_header {
+	name: [ascii; 4]
+}
+
+ihdr_chunk: header("IHDR")
+
+/*
+ List of all possible chunks.
+ First matched is chosen
+*/
+choice {
+	plte_chunk: header("PLTE"),
+	idat_chunk: header("IDAT"),
+	...
+	unknown_chunk: generic_header
+}
+
+iend_chunk: header("IEND")
