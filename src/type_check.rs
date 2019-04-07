@@ -189,6 +189,7 @@ mod test {
         if a.len() != b.len() {
             panic!("{:?} != {:?}", &a, &b);
         }
+        // Assumes elements in a are unique
         for elem in &a {
             if !b.contains(&elem) {
                 panic!("{:?} != {:?}", a, b);

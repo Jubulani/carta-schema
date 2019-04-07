@@ -23,7 +23,7 @@ mod tokeniser;
 mod type_check;
 
 use error::CartaError;
-use type_check::TSchema;
+pub use type_check::TSchema;
 
 pub fn compile_schema_file(data: &str) -> Result<TSchema, CartaError> {
     let tokeniser = tokeniser::Tokeniser::new(&data)?;
