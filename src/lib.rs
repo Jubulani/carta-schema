@@ -1,5 +1,5 @@
 /*!
- * Compiler - Compile .carta schema files into a usable intermediate representation that can be
+ * Compiler - Compile .carta schema files into a usable internal representation that can be
  * applied to binary files.
  *
  * Stages of compilation:
@@ -7,13 +7,13 @@
  * Tokenisation      Split the input file into Tokens
  *      |
  *      V
- *   Parsing         Extract file elements and structure definitions.  Returns a schema object
- *      |            that contains file elements (Nuggets), and NuggetStructDefns.
+ *   Parsing         Extract file structure definitions.  Returns a schema object that contains a
+ *      |            list of the structs, in the order they appeared in the input file.
  *      V
- * Type checking     Uses the NuggetStructDefns and builtin types to do typechecking. Returns
- *      |            TNuggets (Typechecked Nuggets).
+ * Type checking     Uses the StructDefns and builtin types to do type checking. Returns
+ *      |            a tschema object with type checked types.
  *      V
- * Final representation
+ * Final schema
  */
 
 mod builtin_types;
@@ -38,9 +38,9 @@ mod test {
 
     #[test]
     fn test_basic_compile() {
-        let res = compile_schema_file("new_name: int8");
+        let res = compile_schema_file("struct s {new_name: int8,}");
         match res {
-            Err(e) => panic!(e),
+            Err(e) => panic!(format!("{}", e)),
             Ok(_) => (),
         };
     }
