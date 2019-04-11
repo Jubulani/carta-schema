@@ -38,7 +38,7 @@ mod test {
 
     #[test]
     fn test_basic_compile() {
-        let res = compile_schema_file("struct s {new_name: int8,}");
+        let res = compile_schema_file("struct s {new_name: int8}");
         match res {
             Err(e) => panic!(format!("{}", e)),
             Ok(_) => (),

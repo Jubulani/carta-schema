@@ -78,6 +78,14 @@ impl StructState {
             new_child_name: None,
         }
     }
+
+    fn add_complete_struct(self: Box<Self>, schema: &mut Schema) {
+        let defn = StructDefn {
+            name: self.name.unwrap(),
+            elements: self.complete_children,
+        };
+        schema.add_struct(defn);
+    }
 }
 
 impl CompilerState for StructState {
@@ -109,11 +117,7 @@ impl CompilerState for StructState {
             StructSubState::OpenBrace => match t.kind {
                 TokenType::CloseBrace => {
                     // Struct is complete, maybe with child elements
-                    let defn = StructDefn {
-                        name: self.name.unwrap(),
-                        elements: self.complete_children,
-                    };
-                    schema.add_struct(defn);
+                    self.add_complete_struct(schema);
                     return Ok(Box::new(EmptyState {}));
                 }
                 TokenType::Word => {
@@ -142,11 +146,16 @@ impl CompilerState for StructState {
                 self.state = StructSubState::ChildKind;
             }
             StructSubState::ChildKind => {
-                // Next state must be Comma
-                if t.kind != TokenType::Comma {
-                    return Err(CartaError::ParseError(",".to_string(), t.value));
+                match t.kind {
+                    // Next state may be a comma
+                    TokenType::Comma => self.state = StructSubState::OpenBrace,
+                    // Or a close brace if there is no comma after the last element
+                    TokenType::CloseBrace => {
+                        self.add_complete_struct(schema);
+                        return Ok(Box::new(EmptyState {}));
+                    },
+                    _ => return Err(CartaError::ParseError(",".to_string(), t.value)),
                 }
-                self.state = StructSubState::OpenBrace;
             }
         }
 
@@ -203,7 +212,7 @@ mod test {
 
     #[test]
     fn test_basic_builtin() -> Result<(), CartaError> {
-        let tokeniser = Tokeniser::new("struct s {new_name: uint64_le,}")?;
+        let tokeniser = Tokeniser::new("struct s {new_name: uint64_le}")?;
         let schema = compile_schema(tokeniser)?;
         let mut iter = schema.structs.iter();
         assert_eq!(
