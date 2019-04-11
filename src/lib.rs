@@ -32,16 +32,20 @@ pub fn compile_schema_file(data: &str) -> Result<TSchema, CartaError> {
     Ok(tschema)
 }
 
+pub fn apply_schema(_schema: &TSchema, _file_date: &str) {
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn test_basic_compile() {
+    fn test_basic_compile_and_apply() {
         let res = compile_schema_file("struct s {new_name: int8}");
-        match res {
+        let schema = match res {
             Err(e) => panic!(format!("{}", e)),
-            Ok(_) => (),
+            Ok(schema) => schema,
         };
+        apply_schema(&schema, "This is some test data");
     }
 }
