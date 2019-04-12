@@ -32,8 +32,7 @@ pub fn compile_schema_file(data: &str) -> Result<TSchema, CartaError> {
     Ok(tschema)
 }
 
-pub fn apply_schema(_schema: &TSchema, _file_date: &str) {
-}
+pub fn apply_schema(_schema: &TSchema, _file_date: &str) {}
 
 #[cfg(test)]
 mod test {

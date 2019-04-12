@@ -153,7 +153,7 @@ impl CompilerState for StructState {
                     TokenType::CloseBrace => {
                         self.add_complete_struct(schema);
                         return Ok(Box::new(EmptyState {}));
-                    },
+                    }
                     _ => return Err(CartaError::ParseError(",".to_string(), t.value)),
                 }
             }
@@ -217,7 +217,10 @@ mod test {
         let mut iter = schema.structs.iter();
         assert_eq!(
             iter.next(),
-            Some(&build_struct("s", vec![build_element("new_name", "uint64_le")]))
+            Some(&build_struct(
+                "s",
+                vec![build_element("new_name", "uint64_le")]
+            ))
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -254,11 +257,14 @@ mod test {
         let mut iter = schema.structs.iter();
         assert_eq!(
             iter.next(),
-            Some(&build_struct("s", vec![
-                build_element("name1", "int8"),
-                build_element("name2", "uint64_be"),
-                build_element("name3", "f64_le"),
-            ]))
+            Some(&build_struct(
+                "s",
+                vec![
+                    build_element("name1", "int8"),
+                    build_element("name2", "uint64_be"),
+                    build_element("name3", "f64_le"),
+                ]
+            ))
         );
         assert_eq!(iter.next(), None);
         Ok(())

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::builtin_types;
 use crate::error::CartaError;
-use crate::parser::{StructDefn, ElementTypeRef, Schema};
+use crate::parser::{ElementTypeRef, Schema, StructDefn};
 
 #[derive(PartialEq, Debug)]
 pub struct TSchema {
@@ -14,9 +14,7 @@ pub fn type_check_schema(schema: Schema) -> Result<TSchema, CartaError> {
     Ok(TSchema { types })
 }
 
-fn build_structs_map(
-    types: Vec<StructDefn>,
-) -> Result<HashMap<String, StructDefn>, CartaError> {
+fn build_structs_map(types: Vec<StructDefn>) -> Result<HashMap<String, StructDefn>, CartaError> {
     let mut types_map: HashMap<String, StructDefn> = HashMap::new();
 
     for kind in types.into_iter() {
@@ -29,9 +27,7 @@ fn build_structs_map(
     Ok(types_map)
 }
 
-fn check_all_types_defined(
-    types_map: &HashMap<String, StructDefn>,
-) -> Result<(), CartaError> {
+fn check_all_types_defined(types_map: &HashMap<String, StructDefn>) -> Result<(), CartaError> {
     // All types are now stored in types_map.  We can now go over all members of all types, and
     // check that they've all been defined.
     for kind in types_map.values() {
@@ -135,16 +131,13 @@ fn check_types_no_loops(types_map: &HashMap<String, StructDefn>) -> Result<(), C
     Ok(())
 }
 
-fn check_types(
-    types: Vec<StructDefn>,
-) -> Result<HashMap<String, StructDefn>, CartaError> {
+fn check_types(types: Vec<StructDefn>) -> Result<HashMap<String, StructDefn>, CartaError> {
     let types_map = build_structs_map(types)?;
     check_all_types_defined(&types_map)?;
     check_types_no_loops(&types_map)?;
 
     Ok(types_map)
 }
-
 
 #[cfg(test)]
 mod test {
@@ -215,9 +208,7 @@ mod test {
                 build_element("inner2", "uint64_le"),
             ],
         );
-        let schema = Schema {
-            structs: vec![t1],
-        };
+        let schema = Schema { structs: vec![t1] };
         let res = type_check_schema(schema);
         assert_eq!(res, Err(CartaError::UnknownType("type2".to_string())));
     }
@@ -381,9 +372,7 @@ mod test {
                 build_element("inner2", "uint64_le"),
             ],
         );
-        let schema = Schema {
-            structs: vec![t1],
-        };
+        let schema = Schema { structs: vec![t1] };
         let res = type_check_schema(schema);
         assert_eq!(
             res,
@@ -400,9 +389,7 @@ mod test {
                 build_element("inner2", "uint64_le"),
             ],
         );
-        let schema = Schema {
-            structs: vec![t1],
-        };
+        let schema = Schema { structs: vec![t1] };
         let res = type_check_schema(schema);
         assert_eq!(res, Err(CartaError::UnknownType("bad_type".to_string())));
     }
