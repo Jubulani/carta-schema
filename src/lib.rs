@@ -19,6 +19,7 @@
  * Final schema
  */
 
+mod apply;
 mod builtin_types;
 mod correctness;
 mod error;
@@ -26,6 +27,7 @@ mod parser;
 mod tokeniser;
 mod type_check;
 
+pub use apply::Nugget;
 use error::CartaError;
 pub use type_check::TSchema;
 
@@ -37,7 +39,9 @@ pub fn compile_schema_file(data: &str) -> Result<TSchema, CartaError> {
     Ok(tschema)
 }
 
-pub fn apply_schema(_schema: &TSchema, _file_date: &str) {}
+pub fn apply_schema(schema: &TSchema, file_data: &str) -> Nugget {
+    apply::apply_schema(schema, file_data)
+}
 
 #[cfg(test)]
 mod test {
