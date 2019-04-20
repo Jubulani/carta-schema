@@ -16,4 +16,7 @@ pub enum CartaError {
 
     #[fail(display = "Parse error!  Expected '{}', found '{}'", _0, _1)]
     ParseError(String, String),
+
+    #[fail(display = "Missing struct \"root\"")]
+    MissingRootElement(),
 }
