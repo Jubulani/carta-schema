@@ -211,7 +211,7 @@ mod test {
     }
 
     #[test]
-    fn test_basic_builtin() -> Result<(), CartaError> {
+    fn basic_builtin() -> Result<(), CartaError> {
         let tokeniser = Tokeniser::new("struct s {new_name: uint64_le}")?;
         let schema = compile_schema(tokeniser)?;
         let mut iter = schema.structs.iter();
@@ -227,7 +227,7 @@ mod test {
     }
 
     #[test]
-    fn test_empty_input() -> Result<(), CartaError> {
+    fn empty_input() -> Result<(), CartaError> {
         let tokeniser = Tokeniser::new("")?;
         let schema = compile_schema(tokeniser)?;
         let mut iter = schema.structs.iter();
@@ -236,7 +236,7 @@ mod test {
     }
 
     #[test]
-    fn test_whitespace_input() -> Result<(), CartaError> {
+    fn whitespace_input() -> Result<(), CartaError> {
         let tokeniser = Tokeniser::new("\n  \t\n\n")?;
         let schema = compile_schema(tokeniser)?;
         let mut iter = schema.structs.iter();
@@ -245,7 +245,7 @@ mod test {
     }
 
     #[test]
-    fn test_multiple_builtins() -> Result<(), CartaError> {
+    fn multiple_builtins() -> Result<(), CartaError> {
         let tokeniser = Tokeniser::new(
             "struct s {
                 name1: int8,
@@ -271,7 +271,7 @@ mod test {
     }
 
     #[test]
-    fn test_struct_syntax_errors() -> Result<(), CartaError> {
+    fn struct_syntax_errors() -> Result<(), CartaError> {
         let tokeniser = Tokeniser::new(
             "struct new_type {
                 inner_val1: int8,

@@ -33,14 +33,14 @@ mod test {
     }
 
     #[test]
-    fn test_ok() -> Result<(), CartaError> {
+    fn basic_ok() -> Result<(), CartaError> {
         let schema = build_schema_with_elem("root".to_string());
         check_schema(&schema)?;
         Ok(())
     }
 
     #[test]
-    fn test_no_root() {
+    fn no_root() {
         let schema = build_schema_with_elem("notroot".to_string());
         let res = check_schema(&schema);
         assert_eq!(res, Err(CartaError::MissingRootElement()));

@@ -173,7 +173,7 @@ mod test {
     }
 
     #[test]
-    fn test_basic() -> Result<(), CartaError> {
+    fn basic_ok() -> Result<(), CartaError> {
         let elem1 = build_element("inner1", "uint16_le");
         let schema = Schema {
             structs: vec![build_struct("type1", vec![elem1])],
@@ -183,7 +183,7 @@ mod test {
     }
 
     #[test]
-    fn test_multi() -> Result<(), CartaError> {
+    fn multiple_structs() -> Result<(), CartaError> {
         let t1 = build_struct(
             "type1",
             vec![
@@ -200,7 +200,7 @@ mod test {
     }
 
     #[test]
-    fn test_undefined_type() {
+    fn undefined_type() {
         let t1 = build_struct(
             "type1",
             vec![
@@ -214,7 +214,7 @@ mod test {
     }
 
     #[test]
-    fn test_type_loop() {
+    fn type_loop() {
         let t1 = build_struct(
             "type1",
             vec![
@@ -241,7 +241,7 @@ mod test {
     }
 
     #[test]
-    fn test_many_types() -> Result<(), CartaError> {
+    fn many_types() -> Result<(), CartaError> {
         let t1 = build_struct(
             "type1",
             vec![
@@ -274,7 +274,7 @@ mod test {
     }
 
     #[test]
-    fn test_type_loop_long_chain() {
+    fn type_loop_long_chain() {
         let t1 = build_struct(
             "type1",
             vec![
@@ -347,7 +347,7 @@ mod test {
     }
 
     #[test]
-    fn test_duplicate_types() {
+    fn duplicate_types() {
         let t1 = build_struct(
             "type1",
             vec![
@@ -364,7 +364,7 @@ mod test {
     }
 
     #[test]
-    fn test_recursive_type() {
+    fn recursive_type() {
         let t1 = build_struct(
             "type1",
             vec![
@@ -381,7 +381,7 @@ mod test {
     }
 
     #[test]
-    fn test_nugget_bad_typename() {
+    fn element_bad_typename() {
         let t1 = build_struct(
             "type1",
             vec![

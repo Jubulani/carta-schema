@@ -184,7 +184,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_tokenise_word() -> Result<(), CartaError> {
+    fn tokenise_word() -> Result<(), CartaError> {
         let tok = Tokeniser::new("abc")?;
         let mut iter = tok.into_iter();
         assert_eq!(
@@ -199,7 +199,7 @@ mod test {
     }
 
     #[test]
-    fn test_space_at_start_plus_number() -> Result<(), CartaError> {
+    fn space_at_start_plus_number() -> Result<(), CartaError> {
         let tok = Tokeniser::new(" abc23")?;
         let mut iter = tok.into_iter();
         assert_eq!(
@@ -214,7 +214,7 @@ mod test {
     }
 
     #[test]
-    fn test_newline_at_start_plus_underscore() -> Result<(), CartaError> {
+    fn newline_at_start_plus_underscore() -> Result<(), CartaError> {
         let tok = Tokeniser::new("\n_abc_abc")?;
         let mut iter = tok.into_iter();
         assert_eq!(
@@ -236,7 +236,7 @@ mod test {
     }
 
     #[test]
-    fn test_whitespace_at_start_tab() -> Result<(), CartaError> {
+    fn whitespace_at_start_tab() -> Result<(), CartaError> {
         let tok = Tokeniser::new("\tabc")?;
         let mut iter = tok.into_iter();
         assert_eq!(
@@ -251,7 +251,7 @@ mod test {
     }
 
     #[test]
-    fn test_multiple_words() -> Result<(), CartaError> {
+    fn multiple_words() -> Result<(), CartaError> {
         let tok = Tokeniser::new("abc def\nghi\tjkl ")?;
         let mut iter = tok.into_iter();
         assert_eq!(
@@ -294,7 +294,7 @@ mod test {
     }
 
     #[test]
-    fn test_basic_typeof() -> Result<(), CartaError> {
+    fn basic_typeof() -> Result<(), CartaError> {
         let tok = Tokeniser::new("abc: uint64_le")?;
         let mut iter = tok.into_iter();
         assert_eq!(
@@ -323,7 +323,7 @@ mod test {
     }
 
     #[test]
-    fn test_basic_struct() -> Result<(), CartaError> {
+    fn basic_struct() -> Result<(), CartaError> {
         let tok = Tokeniser::new(
             "
         struct new_type {
@@ -441,7 +441,7 @@ mod test {
     }
 
     #[test]
-    fn test_unknown_token() {
+    fn unknown_token() {
         let tok = Tokeniser::new("\tabc😃");
         assert_eq!(tok, Err(CartaError::UnknownSymbol('😃')));
     }

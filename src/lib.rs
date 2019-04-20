@@ -44,7 +44,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_basic_compile_and_apply() {
+    fn basic_compile_and_apply() {
         let res = compile_schema_file("struct root {new_name: int8}");
         let schema = match res {
             Err(e) => panic!(format!("{}", e)),
