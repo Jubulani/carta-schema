@@ -9,7 +9,7 @@ pub struct Nugget {
     pub children: Vec<Nugget>,
 }
 
-pub fn apply_schema(schema: &TSchema, _file_data: &str) -> Nugget {
+pub fn apply_schema(schema: &TSchema, _file_data: &[u8]) -> Nugget {
     // We know this struct must exist, as we checked for it during the correctness checks
     let root_struct = schema.types.get("root").unwrap();
     let start = 0;

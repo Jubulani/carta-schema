@@ -39,7 +39,7 @@ pub fn compile_schema_file(data: &str) -> Result<TSchema, CartaError> {
     Ok(tschema)
 }
 
-pub fn apply_schema(schema: &TSchema, file_data: &str) -> Nugget {
+pub fn apply_schema(schema: &TSchema, file_data: &[u8]) -> Nugget {
     apply::apply_schema(schema, file_data)
 }
 
@@ -54,6 +54,6 @@ mod test {
             Err(e) => panic!(format!("{}", e)),
             Ok(schema) => schema,
         };
-        apply_schema(&schema, "This is some test data");
+        apply_schema(&schema, b"This is some test data");
     }
 }
