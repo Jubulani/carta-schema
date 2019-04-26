@@ -49,11 +49,41 @@ mod test {
 
     #[test]
     fn basic_compile_and_apply() {
-        let res = compile_schema_file("struct root {new_name: int8}");
-        let schema = match res {
-            Err(e) => panic!(format!("{}", e)),
-            Ok(schema) => schema,
-        };
-        apply_schema(&schema, b"This is some test data");
+        let schema = compile_schema_file("struct root {new_name: int8}").unwrap();
+        apply_schema(&schema, b"\x00");
+    }
+
+    #[test]
+    fn all_types() {
+        let schema = compile_schema_file(
+            "struct root {
+                int8: int8,
+                be: be,
+                le: le
+            }
+            struct be {
+                int16: int16_be,
+                int32: int32_be,
+                int64: int64_be,
+                uint16: uint16_be,
+                uint32: uint32_be,
+                uint64: uint64_be,
+                f32: f32_be,
+                f64: f64_be,
+            }
+            struct le {
+                int16: int16_le,
+                int32: int32_le,
+                int64: int64_le,
+                uint16: uint16_le,
+                uint32: uint32_le,
+                uint64: uint64_le,
+                f32: f32_le,
+                f64: f64_le,
+            }
+        ",
+        )
+        .unwrap();
+        apply_schema(&schema, &[0; 81]);
     }
 }

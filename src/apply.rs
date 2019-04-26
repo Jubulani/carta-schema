@@ -40,6 +40,7 @@ fn build_nugget(start: usize, kind: &StructDefn, schema: &TSchema, file_data: &[
             // Must exist, as typechecking has passed for the schema
             let child_kind = schema.types.get(typename).unwrap();
             let child = build_nugget(start + len, child_kind, schema, file_data);
+            len += child.len;
             children.push(child);
         }
     }
