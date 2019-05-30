@@ -1,8 +1,10 @@
+use serde_derive::Serialize;
+
 use crate::builtin_types;
 use crate::parser::{ElementTypeRef, StructDefn};
 use crate::type_check::TSchema;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Serialize)]
 pub struct Nugget {
     pub start: usize,
     pub len: usize,
