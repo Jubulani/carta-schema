@@ -6,7 +6,7 @@ version: 2
 jobs:
   build_and_test:
     docker:
-      - image: circleci/rust:1.32
+      - image: circleci/rust:1.35
     working_directory: ~/carta
     steps:
       - checkout
@@ -14,7 +14,7 @@ jobs:
 
   coverage:
     docker:
-      - image: circleci/rust:1.32
+      - image: circleci/rust:1.35
     environment:
       - RUSTFLAGS: -C link-dead-code
     working_directory: ~/carta
