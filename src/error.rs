@@ -14,6 +14,9 @@ pub enum CartaError {
     #[fail(display = "Unrecognized symbol: {}", _0)]
     UnknownSymbol(char),
 
+    #[fail(display = "Unexpected symbol: {}, expected {}", _0, _1)]
+    UnexpectedSymbol(char, &'static str),
+
     #[fail(display = "Parse error!  Expected '{}', found '{}'", _0, _1)]
     ParseError(String, String),
 
