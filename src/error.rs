@@ -17,6 +17,9 @@ pub enum CartaError {
     #[fail(display = "Unexpected symbol: {}, expected {}", _0, _1)]
     UnexpectedSymbol(char, &'static str),
 
+    #[fail(display = "Unclosed block comment at end of file")]
+    UnclosedBlockComment(),
+
     #[fail(display = "Parse error!  Expected '{}', found '{}'", _0, _1)]
     ParseError(String, String),
 

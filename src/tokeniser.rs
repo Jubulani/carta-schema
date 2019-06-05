@@ -14,12 +14,12 @@ use crate::error::CartaError;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenType {
-    Word,         // Start with _ or letter, can contain any number of _, letter or digit after that
-    TypeOf,       // :
-    NewLine,      // \n
-    OpenBrace,    // {
-    CloseBrace,   // }
-    Comma,        // ,
+    Word,       // Start with _ or letter, can contain any number of _, letter or digit after that
+    TypeOf,     // :
+    NewLine,    // \n
+    OpenBrace,  // {
+    CloseBrace, // }
+    Comma,      // ,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -49,8 +49,8 @@ impl Tokeniser {
         }
 
         // Once we're done with the input, we may still be in the process of building a token.  If we are,
-        // add it to the list.
-        if let Some(t) = state.get_token() {
+        // and it's valid, add it to the list.
+        if let Some(t) = state.eof()? {
             tokens.push(t);
         }
         Ok(Tokeniser { tokens })
@@ -70,9 +70,8 @@ trait TokeniserState {
         tokens: &mut Vec<Token>,
     ) -> Result<Box<dyn TokeniserState>, CartaError>;
 
-    /// Get an incomplete token if one exists.  Used to get the last token when the input doesn't
-    /// end with whitespace.
-    fn get_token(self: Box<Self>) -> Option<Token>;
+    /// Pick up the final token if there is one waiting to be emmitted on end-of-input.
+    fn eof(self: Box<Self>) -> Result<Option<Token>, CartaError>;
 }
 
 /// Default state representing start of input, or when previous input has all been completely
@@ -91,8 +90,8 @@ impl TokeniserState for EmptyState {
         Ok(self)
     }
 
-    fn get_token(self: Box<Self>) -> Option<Token> {
-        None
+    fn eof(self: Box<Self>) -> Result<Option<Token>, CartaError> {
+        Ok(None)
     }
 }
 
@@ -106,6 +105,10 @@ impl WordState {
         WordState {
             value: c.to_string(),
         }
+    }
+
+    fn get_token(self: Box<Self>) -> Token {
+        Token::new(TokenType::Word, self.value)
     }
 }
 
@@ -122,7 +125,7 @@ impl TokeniserState for WordState {
         } else {
             // Otherwise, the next character is not a valid word character.  Emit the Word found so far,
             // and continue processing the input character as a potential new unknown token.
-            tokens.push(self.get_token().unwrap());
+            tokens.push(self.get_token());
 
             if let Some(s) = new_state(c, tokens)? {
                 Ok(s)
@@ -132,12 +135,12 @@ impl TokeniserState for WordState {
         }
     }
 
-    fn get_token(self: Box<Self>) -> Option<Token> {
-        Some(Token::new(TokenType::Word, self.value))
+    fn eof(self: Box<Self>) -> Result<Option<Token>, CartaError> {
+        Ok(Some(self.get_token()))
     }
 }
 
-struct CommentState;  // Don't yet know if it's a block comment or a line comment
+struct CommentState; // Don't yet know if it's a block comment or a line comment
 
 impl TokeniserState for CommentState {
     fn new_char(
@@ -145,17 +148,16 @@ impl TokeniserState for CommentState {
         c: char,
         _: &mut Vec<Token>,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
-
         // Decide between a block comment and a line comment
         return match c {
             '/' => Ok(Box::new(LineCommentState)),
             '*' => Ok(Box::new(BlockCommentState)),
             _ => Err(CartaError::UnexpectedSymbol(c, "* or /")),
-        }
+        };
     }
 
-    fn get_token(self: Box<Self>) -> Option<Token> {
-        None
+    fn eof(self: Box<Self>) -> Result<Option<Token>, CartaError> {
+        Ok(None)
     }
 }
 
@@ -167,7 +169,6 @@ impl TokeniserState for LineCommentState {
         c: char,
         _: &mut Vec<Token>,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
-
         if c == '\n' {
             // Newline.  End of comment.
             return Ok(Box::new(EmptyState));
@@ -176,8 +177,9 @@ impl TokeniserState for LineCommentState {
         }
     }
 
-    fn get_token(self: Box<Self>) -> Option<Token> {
-        None
+    // Allow eof in line comments
+    fn eof(self: Box<Self>) -> Result<Option<Token>, CartaError> {
+        Ok(None)
     }
 }
 
@@ -189,7 +191,6 @@ impl TokeniserState for BlockCommentState {
         c: char,
         _: &mut Vec<Token>,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
-
         if c == '*' {
             // Maybe end of comment
             return Ok(Box::new(EndBlockCommentState));
@@ -198,8 +199,8 @@ impl TokeniserState for BlockCommentState {
         }
     }
 
-    fn get_token(self: Box<Self>) -> Option<Token> {
-        None
+    fn eof(self: Box<Self>) -> Result<Option<Token>, CartaError> {
+        Err(CartaError::UnclosedBlockComment())
     }
 }
 
@@ -211,7 +212,6 @@ impl TokeniserState for EndBlockCommentState {
         c: char,
         _: &mut Vec<Token>,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
-
         if c == '/' {
             // End of comment
             return Ok(Box::new(EmptyState));
@@ -221,11 +221,10 @@ impl TokeniserState for EndBlockCommentState {
         }
     }
 
-    fn get_token(self: Box<Self>) -> Option<Token> {
-        None
+    fn eof(self: Box<Self>) -> Result<Option<Token>, CartaError> {
+        Err(CartaError::UnclosedBlockComment())
     }
 }
-
 
 /// Process a new input character with no current state.  Matched single-character tokens are
 /// emitted immediately, matched multi character tokens return the appropriate state.
@@ -537,7 +536,7 @@ mod test {
 
     #[test]
     fn unknown_token() {
-        let tok = Tokeniser::new("\tabc😃q");
+        let tok = Tokeniser::new("\tabc😃");
         assert_eq!(tok, Err(CartaError::UnknownSymbol('😃')));
     }
 
@@ -571,18 +570,9 @@ mod test {
         Ok(())
     }
 
-    /*#[test]
-    fn incomplete_block_comment() -> Result<(), CartaError> {
-        let tok = Tokeniser::new("/ *")?;
-        let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "abc".to_string()
-            })
-        );
-        assert_eq!(iter.next(), None);
-        Ok(())
-    }*/
+    #[test]
+    fn incomplete_block_comment() {
+        let tok = Tokeniser::new("/*");
+        assert_eq!(tok, Err(CartaError::UnclosedBlockComment()));
+    }
 }
