@@ -17,10 +17,10 @@ pub fn apply_schema(schema: &TSchema, file_data: &[u8]) -> Nugget {
     // We know this struct must exist, as we checked for it during the correctness checks
     let root_struct = schema.types.get("root").unwrap();
     let start = 0;
-    build_nugget(start, root_struct, schema, file_data)
+    build_nugget(start, root_struct, "root", schema, file_data)
 }
 
-fn build_nugget(start: usize, kind: &StructDefn, schema: &TSchema, file_data: &[u8]) -> Nugget {
+fn build_nugget(start: usize, kind: &StructDefn, name: &str, schema: &TSchema, file_data: &[u8]) -> Nugget {
     let mut len = 0;
 
     let mut children = Vec::new();
@@ -41,7 +41,7 @@ fn build_nugget(start: usize, kind: &StructDefn, schema: &TSchema, file_data: &[
         } else {
             // Must exist, as typechecking has passed for the schema
             let child_kind = schema.types.get(typename).unwrap();
-            let child = build_nugget(start + len, child_kind, schema, file_data);
+            let child = build_nugget(start + len, child_kind, &element.name, schema, file_data);
             len += child.len;
             children.push(child);
         }
@@ -49,7 +49,7 @@ fn build_nugget(start: usize, kind: &StructDefn, schema: &TSchema, file_data: &[
     Nugget {
         start,
         len,
-        name: kind.name.clone(),
+        name: name.to_string(),
         value: None,
         children,
     }
@@ -134,6 +134,68 @@ mod test {
                         children: Vec::new(),
                     }
                 ],
+            }
+        );
+    }
+
+    #[test]
+    fn child_structs() {
+        let schema =
+            compile_schema_file("struct root {version1: Version, version2: Version} struct Version {major: int8, minor: int8}").unwrap();
+        let res = apply_schema(&schema, b"\x00\x01\x02\x03");
+        assert_eq!(
+            res,
+            Nugget {
+                start: 0,
+                len: 4,
+                name: "root".to_string(),
+                value: None,
+                children: vec![
+                    Nugget {
+                        start: 0,
+                        len: 2,
+                        name: "version1".to_string(),
+                        value: None,
+                        children: vec![
+                            Nugget {
+                                start: 0,
+                                len: 1,
+                                name: "major".to_string(),
+                                value: Some("0".to_string()),
+                                children: Vec::new(),
+                            },
+                            Nugget {
+                                start: 1,
+                                len: 1,
+                                name: "minor".to_string(),
+                                value: Some("1".to_string()),
+                                children: Vec::new(),
+                            }
+                        ]
+                    },
+                    Nugget {
+                        start: 2,
+                        len: 2,
+                        name: "version2".to_string(),
+                        value: None,
+                        children: vec![
+                            Nugget {
+                                start: 2,
+                                len: 1,
+                                name: "major".to_string(),
+                                value: Some("2".to_string()),
+                                children: Vec::new(),
+                            },
+                            Nugget {
+                                start: 3,
+                                len: 1,
+                                name: "minor".to_string(),
+                                value: Some("3".to_string()),
+                                children: Vec::new(),
+                            }
+                        ]
+                    }
+                ]
             }
         );
     }
