@@ -1,0 +1,29 @@
+typedef int16: int16_le
+typedef int32: int32_le
+
+struct Version<T> {
+	major: T,
+	minor: T,
+	patch: T,
+	release: T,
+	%{display("{major}.{minor}.{patch}.{release}")}%
+}
+
+struct root {
+	version: Version<int16>,
+}
+
+
+
+/* Others:
+
+%{if major == 1}%
+	version2: int16
+%{endif}%
+
+%{bar = 1}%
+%{while bar < 10}%
+	version2$$bar: int16
+%{endwhile}%
+
+*/
