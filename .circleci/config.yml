@@ -12,23 +12,8 @@ jobs:
       - checkout
       - run: cargo test
 
-  coverage:
-    docker:
-      - image: circleci/rust:1.35
-    environment:
-      - RUSTFLAGS: -C link-dead-code
-    working_directory: ~/carta
-    steps:
-      - checkout
-      - run: cargo test --no-run
-      - run: sudo apt-get install -y libcurl4-openssl-dev libelf-dev libdw-dev cmake gcc binutils-dev libiberty-dev
-      - run: ./coverage.sh
-
 workflows:
   version: 2
   build-and-coverage:
     jobs:
       - build_and_test
-      - coverage:
-          requires:
-            - build_and_test
