@@ -14,12 +14,15 @@ use crate::error::CartaError;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenType {
-    Word,       // Start with _ or letter, can contain any number of _, letter or digit after that
-    TypeOf,     // :
-    NewLine,    // \n
-    OpenBrace,  // {
-    CloseBrace, // }
-    Comma,      // ,
+    Word,         // Start with _ or letter, can contain any number of _, letter or digit after that
+    Colon,        // :
+    NewLine,      // \n
+    OpenBrace,    // {
+    CloseBrace,   // }
+    Comma,        // ,
+    OpenBracket,  // [
+    CloseBracket, // ]
+    Semicolon,    // ;
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -247,30 +250,19 @@ fn new_state(
         return Ok(Some(Box::new(WordState::new(c))));
     }
 
-    // No state needed
-    if c == ':' {
-        tokens.push(Token::new(TokenType::TypeOf, c.to_string()));
-        return Ok(None);
-    }
-    if c == '{' {
-        tokens.push(Token::new(TokenType::OpenBrace, c.to_string()));
-        return Ok(None);
-    }
-    if c == '}' {
-        tokens.push(Token::new(TokenType::CloseBrace, c.to_string()));
-        return Ok(None);
-    }
-    if c == ',' {
-        tokens.push(Token::new(TokenType::Comma, c.to_string()));
-        return Ok(None);
+    match c {
+        ':' => tokens.push(Token::new(TokenType::Colon, c.to_string())),
+        '{' => tokens.push(Token::new(TokenType::OpenBrace, c.to_string())),
+        '}' => tokens.push(Token::new(TokenType::CloseBrace, c.to_string())),
+        ',' => tokens.push(Token::new(TokenType::Comma, c.to_string())),
+        '[' => tokens.push(Token::new(TokenType::OpenBracket, c.to_string())),
+        ']' => tokens.push(Token::new(TokenType::CloseBracket, c.to_string())),
+        ';' => tokens.push(Token::new(TokenType::Semicolon, c.to_string())),
+        '/' => return Ok(Some(Box::new(CommentState))), // Start a comment
+        _ => return Err(CartaError::UnknownSymbol(c)),
     }
 
-    // Start a comment
-    if c == '/' {
-        return Ok(Some(Box::new(CommentState)));
-    }
-
-    Err(CartaError::UnknownSymbol(c))
+    return Ok(None);
 }
 
 #[cfg(test)]
@@ -401,7 +393,7 @@ mod test {
         assert_eq!(
             iter.next(),
             Some(Token {
-                kind: TokenType::TypeOf,
+                kind: TokenType::Colon,
                 value: ":".to_string()
             })
         );
@@ -471,7 +463,7 @@ mod test {
         assert_eq!(
             iter.next(),
             Some(Token {
-                kind: TokenType::TypeOf,
+                kind: TokenType::Colon,
                 value: ":".to_string()
             })
         );
@@ -506,7 +498,7 @@ mod test {
         assert_eq!(
             iter.next(),
             Some(Token {
-                kind: TokenType::TypeOf,
+                kind: TokenType::Colon,
                 value: ":".to_string()
             })
         );

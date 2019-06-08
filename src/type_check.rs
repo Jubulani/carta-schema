@@ -32,7 +32,11 @@ fn check_all_types_defined(types_map: &HashMap<String, StructDefn>) -> Result<()
     // check that they've all been defined.
     for kind in types_map.values() {
         for member in &kind.elements {
-            let ElementTypeRef::TypeName(typename) = &member.kind;
+            let typename = match &member.kind {
+                ElementTypeRef::TypeName(typename) => &typename,
+                ElementTypeRef::ArrayElem(array_defn) => &array_defn.kind,
+            };
+            //let ElementTypeRef::TypeName(typename) = &member.kind;
             if !builtin_types::is_builtin_type(&typename)
                 && types_map.get::<str>(&typename).is_none()
             {
@@ -64,7 +68,10 @@ fn check_types_no_loops(types_map: &HashMap<String, StructDefn>) -> Result<(), C
     for kind in types_map.values() {
         let mut all_builtin = true;
         for member in &kind.elements {
-            let ElementTypeRef::TypeName(typename) = &member.kind;
+            let typename = match &member.kind {
+                ElementTypeRef::TypeName(typename) => &typename,
+                ElementTypeRef::ArrayElem(array_defn) => &array_defn.kind,
+            };
             if !builtin_types::is_builtin_type(&typename)
                 && types_resolved.get::<str>(&typename).is_none()
             {
@@ -100,7 +107,10 @@ fn check_types_no_loops(types_map: &HashMap<String, StructDefn>) -> Result<(), C
 
                 let mut all_resolved = true;
                 for member in &parent.elements {
-                    let ElementTypeRef::TypeName(typename) = &member.kind;
+                    let typename = match &member.kind {
+                        ElementTypeRef::TypeName(typename) => &typename,
+                        ElementTypeRef::ArrayElem(array_defn) => &array_defn.kind,
+                    };
                     if !builtin_types::is_builtin_type(&typename)
                         && types_resolved.get::<str>(&typename).is_none()
                     {

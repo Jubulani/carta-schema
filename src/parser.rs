@@ -21,6 +21,13 @@ pub struct Element {
 #[derive(PartialEq, Debug)]
 pub enum ElementTypeRef {
     TypeName(String),
+    ArrayElem(ArrayDefn),
+}
+
+#[derive(PartialEq, Debug)]
+pub struct ArrayDefn {
+    pub kind: String,
+    pub len_identifier: String,
 }
 
 #[derive(PartialEq, Debug)]
@@ -86,6 +93,14 @@ impl StructState {
         };
         schema.add_struct(defn);
     }
+
+    fn append_child(self: &mut Self, kind: ElementTypeRef) {
+        let elem = Element {
+            name: self.new_child_name.take().unwrap(),
+            kind,
+        };
+        self.complete_children.push(elem);
+    }
 }
 
 impl CompilerState for StructState {
@@ -108,7 +123,7 @@ impl CompilerState for StructState {
                 self.state = StructSubState::Name;
             }
             StructSubState::Name => {
-                // Next state must be OpenBrace
+                // Next token must be OpenBrace
                 if t.kind != TokenType::OpenBrace {
                     return Err(CartaError::ParseError("{".to_string(), t.value));
                 }
@@ -127,23 +142,29 @@ impl CompilerState for StructState {
                 _ => return Err(CartaError::ParseError("}".to_string(), t.value)),
             },
             StructSubState::ChildName => {
-                // Next state must be TypeOf
-                if t.kind != TokenType::TypeOf {
+                // Next token must be Colon
+                if t.kind != TokenType::Colon {
                     return Err(CartaError::ParseError(":".to_string(), t.value));
                 }
                 self.state = StructSubState::ChildTypeOf;
             }
             StructSubState::ChildTypeOf => {
-                // Next state must be a typename
-                if t.kind != TokenType::Word {
-                    return Err(CartaError::ParseError("<typename>".to_string(), t.value));
+                // Next token must be a type definition - a typename or array
+                match t.kind {
+                    TokenType::Word => {
+                        // Typename
+                        let kind = ElementTypeRef::TypeName(t.value);
+                        self.append_child(kind);
+
+                        self.state = StructSubState::ChildKind;
+                    }
+                    TokenType::OpenBracket => {
+                        self.state = StructSubState::ChildKind;
+                        let arr = Box::new(ArrayState::new(self));
+                        return Ok(arr);
+                    }
+                    _ => return Err(CartaError::ParseError("<typename>".to_string(), t.value)),
                 }
-                let kind = t.value;
-                self.complete_children.push(Element {
-                    name: self.new_child_name.take().unwrap(),
-                    kind: ElementTypeRef::TypeName(kind),
-                });
-                self.state = StructSubState::ChildKind;
             }
             StructSubState::ChildKind => {
                 match t.kind {
@@ -156,6 +177,92 @@ impl CompilerState for StructState {
                     }
                     _ => return Err(CartaError::ParseError(",".to_string(), t.value)),
                 }
+            }
+        }
+
+        Ok(self)
+    }
+}
+
+struct ArrayState {
+    parent: Box<StructState>,
+    state: ArraySubState,
+    kind: Option<String>,
+    len_identifier: Option<String>,
+}
+
+impl ArrayState {
+    fn new(parent: Box<StructState>) -> ArrayState {
+        ArrayState {
+            parent,
+            state: ArraySubState::Begin,
+            kind: None,
+            len_identifier: None,
+        }
+    }
+}
+
+#[derive(PartialEq)]
+enum ArraySubState {
+    Begin,
+    Kind,
+    Semicolon,
+    Length,
+}
+
+impl CompilerState for ArrayState {
+    fn new_token(
+        mut self: Box<Self>,
+        t: Token,
+        _: &mut Schema,
+    ) -> Result<Box<dyn CompilerState>, CartaError> {
+        // New lines are ignored
+        if t.kind == TokenType::NewLine {
+            return Ok(self);
+        }
+
+        match self.state {
+            ArraySubState::Begin => {
+                // Firstly, mmust have a typename
+                if t.kind != TokenType::Word {
+                    return Err(CartaError::ParseError("<typename>".to_string(), t.value));
+                }
+
+                self.kind = Some(t.value);
+                self.state = ArraySubState::Kind;
+            }
+            ArraySubState::Kind => {
+                // Next is semicolon separating type from length
+                if t.kind != TokenType::Semicolon {
+                    return Err(CartaError::ParseError(";".to_string(), t.value));
+                }
+                self.state = ArraySubState::Semicolon;
+            }
+            ArraySubState::Semicolon => {
+                // Next is length
+                if t.kind != TokenType::Word {
+                    return Err(CartaError::ParseError("<identifier>".to_string(), t.value));
+                }
+
+                self.len_identifier = Some(t.value);
+                self.state = ArraySubState::Length;
+            }
+            ArraySubState::Length => {
+                // Finally, closing bracket
+                if t.kind != TokenType::CloseBracket {
+                    return Err(CartaError::ParseError("]".to_string(), t.value));
+                }
+
+                // Aaaand, we're done
+                // We know we have both kind and len_identifier values available, as we've successfully
+                // moved through all states
+                let arr_defn = ArrayDefn {
+                    kind: self.kind.unwrap(),
+                    len_identifier: self.len_identifier.unwrap(),
+                };
+                self.parent
+                    .append_child(ElementTypeRef::ArrayElem(arr_defn));
+                return Ok(self.parent);
             }
         }
 
@@ -196,10 +303,20 @@ pub fn compile_schema(tokeniser: Tokeniser) -> Result<Schema, CartaError> {
 mod test {
     use super::*;
 
-    fn build_element(name: &str, typename: &str) -> Element {
+    fn build_basic_element(name: &str, typename: &str) -> Element {
         Element {
             name: name.to_string(),
             kind: ElementTypeRef::TypeName(typename.to_string()),
+        }
+    }
+
+    fn build_array_element(name: &str, typename: &str, length: &str) -> Element {
+        Element {
+            name: name.to_string(),
+            kind: ElementTypeRef::ArrayElem(ArrayDefn {
+                kind: typename.to_string(),
+                len_identifier: length.to_string(),
+            }),
         }
     }
 
@@ -219,7 +336,7 @@ mod test {
             iter.next(),
             Some(&build_struct(
                 "s",
-                vec![build_element("new_name", "uint64_le")]
+                vec![build_basic_element("new_name", "uint64_le")]
             ))
         );
         assert_eq!(iter.next(), None);
@@ -260,9 +377,9 @@ mod test {
             Some(&build_struct(
                 "s",
                 vec![
-                    build_element("name1", "int8"),
-                    build_element("name2", "uint64_be"),
-                    build_element("name3", "f64_le"),
+                    build_basic_element("name1", "int8"),
+                    build_basic_element("name2", "uint64_be"),
+                    build_basic_element("name3", "f64_le"),
                 ]
             ))
         );
@@ -367,6 +484,25 @@ mod test {
                 "inner_val2".to_string()
             ))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn arrays() -> Result<(), CartaError> {
+        let tokeniser = Tokeniser::new("struct s {len: int8, arr1: [int8; len]}")?;
+        let schema = compile_schema(tokeniser)?;
+        let mut iter = schema.structs.iter();
+        assert_eq!(
+            iter.next(),
+            Some(&build_struct(
+                "s",
+                vec![
+                    build_basic_element("len", "int8"),
+                    build_array_element("arr1", "int8", "len")
+                ]
+            ))
+        );
+        assert_eq!(iter.next(), None);
         Ok(())
     }
 }

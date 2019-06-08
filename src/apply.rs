@@ -20,12 +20,21 @@ pub fn apply_schema(schema: &TSchema, file_data: &[u8]) -> Nugget {
     build_nugget(start, root_struct, "root", schema, file_data)
 }
 
-fn build_nugget(start: usize, kind: &StructDefn, name: &str, schema: &TSchema, file_data: &[u8]) -> Nugget {
+fn build_nugget(
+    start: usize,
+    kind: &StructDefn,
+    name: &str,
+    schema: &TSchema,
+    file_data: &[u8],
+) -> Nugget {
     let mut len = 0;
 
     let mut children = Vec::new();
     for element in &kind.elements {
-        let ElementTypeRef::TypeName(typename) = &element.kind;
+        let typename = match &element.kind {
+            ElementTypeRef::TypeName(typename) => &typename,
+            ElementTypeRef::ArrayElem(array_defn) => &array_defn.kind,
+        };
         if builtin_types::is_builtin_type(typename) {
             let elem_data = file_data.get(start + len..).unwrap();
             let (size, value) = builtin_types::get_value(elem_data, typename);
