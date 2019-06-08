@@ -25,4 +25,7 @@ pub enum CartaError {
 
     #[fail(display = "Missing struct \"root\"")]
     MissingRootElement(),
+
+    #[fail(display = "Bad array length: {}", _0)]
+    BadArrayLen(String),
 }

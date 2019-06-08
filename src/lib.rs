@@ -13,8 +13,9 @@
  * Type checking       Uses the StructDefns and builtin types to do type checking. Returns
  *      |              a tschema object with type checked types.
  *      V
- * Correctness Checks  Final checks on the schema.  eg. Root element is correctly present.
- *      |
+ * Correctness Checks  Final checks on the schema.
+ *      |               - Root element is correctly present
+ *      |               - Array lengths can be calculated
  *      V
  * Final schema
  */
@@ -62,14 +63,15 @@ mod test {
                 le: le
             }
             struct be {
-                int16: int16_be,
-                int32: int32_be,
-                int64: int64_be,
-                uint16: uint16_be,
-                uint32: uint32_be,
-                uint64: uint64_be,
-                f32: f32_be,
-                f64: f64_be,
+                i_16: int16_be,
+                i_32: int32_be,
+                i_64: int64_be,
+                u_16: uint16_be,
+                u_32: uint32_be,
+                u_64: uint64_be,
+                f_32: f32_be,
+                f_64: f64_be,
+                arr: [int16_be; i_16]
             }
             struct le {
                 int16: int16_le,
@@ -84,6 +86,6 @@ mod test {
         ",
         )
         .unwrap();
-        apply_schema(&schema, &[0; 81]);
+        apply_schema(&schema, &[0; 83]);
     }
 }

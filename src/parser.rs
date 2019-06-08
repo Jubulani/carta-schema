@@ -488,7 +488,7 @@ mod test {
     }
 
     #[test]
-    fn arrays() -> Result<(), CartaError> {
+    fn array() -> Result<(), CartaError> {
         let tokeniser = Tokeniser::new("struct s {len: int8, arr1: [int8; len]}")?;
         let schema = compile_schema(tokeniser)?;
         let mut iter = schema.structs.iter();
@@ -499,6 +499,25 @@ mod test {
                 vec![
                     build_basic_element("len", "int8"),
                     build_array_element("arr1", "int8", "len")
+                ]
+            ))
+        );
+        assert_eq!(iter.next(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn array_bad_len() -> Result<(), CartaError> {
+        let tokeniser = Tokeniser::new("struct s {len: int8, arr1: [int8; blah]}")?;
+        let schema = compile_schema(tokeniser)?;
+        let mut iter = schema.structs.iter();
+        assert_eq!(
+            iter.next(),
+            Some(&build_struct(
+                "s",
+                vec![
+                    build_basic_element("len", "int8"),
+                    build_array_element("arr1", "int8", "blah")
                 ]
             ))
         );
