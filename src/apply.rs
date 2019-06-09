@@ -1,6 +1,7 @@
 use serde_derive::Serialize;
 
 use crate::builtin_types;
+use crate::builtin_types::BuiltinTypeClass;
 use crate::parser;
 use crate::parser::{ElementTypeRef, StructDefn};
 use crate::type_check::TSchema;
@@ -94,29 +95,46 @@ fn build_array_val(
     schema: &TSchema,
     siblings: &Vec<Nugget>,
 ) -> (Nugget, usize) {
-    // Get the array len
-    let len = get_elem_size_value(&array_defn.len_identifier, siblings).unwrap();
-
     let mut children = Vec::new();
     let mut size = 0;
-    for i in 0..len {
-        let child_name = i.to_string();
-        let (child, len) = build_single_val(
-            &array_defn.kind,
-            start + size,
-            file_data,
-            &child_name,
-            schema,
-        );
-        children.push(child);
-        size += len;
+    let value: Option<String>;
+
+    // Get the array len
+    let arr_len = get_elem_size_value(&array_defn.len_identifier, siblings).unwrap();
+
+    // If we have a text type, then build up the individual characters into a single text string
+    if builtin_types::is_type_class(&array_defn.kind, BuiltinTypeClass::Text) {
+        let mut text_value = String::new();
+        for _ in 0..arr_len {
+            let elem_data = file_data.get((start + size)..).unwrap();
+            let (char_size, char_value) =
+                builtin_types::get_value(elem_data, &array_defn.kind).unwrap();
+            text_value += &char_value;
+            size += char_size;
+        }
+        value = Some(text_value)
+    } else {
+        // Otherwise, treat each array entry individually
+        for i in 0..arr_len {
+            let child_name = i.to_string();
+            let (child, len) = build_single_val(
+                &array_defn.kind,
+                start + size,
+                file_data,
+                &child_name,
+                schema,
+            );
+            children.push(child);
+            size += len;
+        }
+        value = None;
     }
     (
         Nugget {
             start,
             len: size,
             name: name.to_string(),
-            value: None,
+            value,
             children,
         },
         size,

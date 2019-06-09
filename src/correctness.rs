@@ -1,4 +1,5 @@
 use crate::builtin_types;
+use crate::builtin_types::BuiltinTypeClass;
 use crate::error::CartaError;
 use crate::parser::ElementTypeRef;
 use crate::type_check::TSchema;
@@ -26,7 +27,7 @@ fn check_array_lengths(schema: &TSchema) -> Result<(), CartaError> {
                     if struct_defn.elements[j].name == arr.len_identifier {
                         // Check that this element is a builtin type that is an integer type
                         if let ElementTypeRef::TypeName(typename) = &struct_defn.elements[j].kind {
-                            if builtin_types::is_integer_type(typename) {
+                            if builtin_types::is_type_class(typename, BuiltinTypeClass::Integer) {
                                 found = true;
                                 break;
                             } else {

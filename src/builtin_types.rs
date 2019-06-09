@@ -1,9 +1,10 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 
 #[derive(PartialEq)]
-enum BuiltinTypeClass {
+pub enum BuiltinTypeClass {
     Integer,
     Float,
+    Text,
 }
 
 struct CartaBuiltinType<'a> {
@@ -104,6 +105,12 @@ fn get_builtin_types(name: &str) -> Option<CartaBuiltinType<'static>> {
             value: &|data| LittleEndian::read_f64(data).to_string(),
             class: BuiltinTypeClass::Float,
         }),
+        // Single ascii character
+        "ascii" => Some(CartaBuiltinType {
+            size: 1,
+            value: &|data| (u8::from_le_bytes([data[0]]) as char).to_string(),
+            class: BuiltinTypeClass::Text,
+        }),
         _ => None,
     }
 }
@@ -116,8 +123,8 @@ pub fn get_value(data: &[u8], name: &str) -> Option<(usize, String)> {
     get_builtin_types(name).map(|defn| (defn.size, (defn.value)(data)))
 }
 
-pub fn is_integer_type(name: &str) -> bool {
+pub fn is_type_class(name: &str, class: BuiltinTypeClass) -> bool {
     get_builtin_types(name)
-        .map(|defn| defn.class == BuiltinTypeClass::Integer)
+        .map(|defn| defn.class == class)
         .unwrap_or(false)
 }
