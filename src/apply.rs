@@ -37,7 +37,9 @@ fn build_nugget(
         };
         if builtin_types::is_builtin_type(typename) {
             let elem_data = file_data.get(start + len..).unwrap();
-            let (size, value) = builtin_types::get_value(elem_data, typename);
+
+            // is_builtin_type returned true, so this value must exist
+            let (size, value) = builtin_types::get_value(elem_data, typename).unwrap();
             let child = Nugget {
                 start: start + len,
                 len: size,
