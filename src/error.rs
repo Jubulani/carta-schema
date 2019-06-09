@@ -28,4 +28,7 @@ pub enum CartaError {
 
     #[fail(display = "Bad array length: {}", _0)]
     BadArrayLen(String),
+
+    #[fail(display = "Array length must be builtin integer type: {}", _0)]
+    BadArrayLenType(String),
 }
