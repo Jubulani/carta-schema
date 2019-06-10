@@ -1,7 +1,7 @@
 use crate::builtin_types;
 use crate::builtin_types::BuiltinTypeClass;
 use crate::error::CartaError;
-use crate::parser::ElementTypeRef;
+use crate::parser::{ArrayDefn, ArrayLen, ElementTypeRef, StructDefn};
 use crate::type_check::TSchema;
 
 pub fn check_schema(schema: &TSchema) -> Result<(), CartaError> {
@@ -22,30 +22,41 @@ fn check_array_lengths(schema: &TSchema) -> Result<(), CartaError> {
     for (_name, struct_defn) in &schema.types {
         for i in 0..struct_defn.elements.len() {
             if let ElementTypeRef::ArrayElem(arr) = &struct_defn.elements[i].kind {
-                let mut found = false;
-                for j in 0..i {
-                    if struct_defn.elements[j].name == arr.len_identifier {
-                        // Check that this element is a builtin type that is an integer type
-                        if let ElementTypeRef::TypeName(typename) = &struct_defn.elements[j].kind {
-                            if builtin_types::is_type_class(typename, BuiltinTypeClass::Integer) {
-                                found = true;
-                                break;
-                            } else {
-                                return Err(CartaError::BadArrayLenType(arr.len_identifier.clone()));
-                            }
-                        } else {
-                            return Err(CartaError::BadArrayLenType(arr.len_identifier.clone()));
-                        }
-                    }
-                }
-                if !found {
-                    return Err(CartaError::BadArrayLen(arr.len_identifier.clone()));
-                }
+                check_array_elem(struct_defn, arr, i)?;
             }
         }
     }
 
     Ok(())
+}
+
+fn check_array_elem(
+    struct_defn: &StructDefn,
+    arr: &ArrayDefn,
+    arr_idx: usize,
+) -> Result<(), CartaError> {
+    match &arr.length {
+        // Nothing to check
+        ArrayLen::Static(_) => Ok(()),
+        // Check that the element we reference is a builtin integer type
+        ArrayLen::Identifier(id) => {
+            for j in 0..arr_idx {
+                if struct_defn.elements[j].name == *id {
+                    // Check that this element is a builtin type that is an integer type
+                    if let ElementTypeRef::TypeName(typename) = &struct_defn.elements[j].kind {
+                        if builtin_types::is_type_class(typename, BuiltinTypeClass::Integer) {
+                            return Ok(());
+                        } else {
+                            return Err(CartaError::BadArrayLenType(id.clone()));
+                        }
+                    } else {
+                        return Err(CartaError::BadArrayLenType(id.clone()));
+                    }
+                }
+            }
+            Err(CartaError::BadArrayLen(id.clone()))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -95,7 +106,7 @@ mod test {
                     name: "foo".to_string(),
                     kind: ElementTypeRef::ArrayElem(ArrayDefn {
                         kind: "int8".to_string(),
-                        len_identifier: "unknown".to_string(),
+                        length: ArrayLen::Identifier("unknown".to_string()),
                     }),
                 }],
             },

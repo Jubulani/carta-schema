@@ -546,7 +546,13 @@ mod test {
             Some(&build_struct(
                 "s",
                 vec![
-                    build_array_element("arr1", "int8", "4")
+                    Element {
+                        name: "arr1".to_string(),
+                        kind: ElementTypeRef::ArrayElem(ArrayDefn {
+                            kind: "int8".to_string(),
+                            length: ArrayLen::Static(4),
+                        }),
+                    }
                 ]
             ))
         );
