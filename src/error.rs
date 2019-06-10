@@ -31,4 +31,10 @@ pub enum CartaError {
 
     #[fail(display = "Array length must be builtin integer type: {}", _0)]
     BadArrayLenType(String),
+
+    #[fail(display = "Cannot start number with leading zero")]
+    LeadingZero(),
+
+    #[fail(display = "Integer too large: Must be 9 digits or less")]
+    IntegerTooLarge(),
 }

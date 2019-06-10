@@ -3,7 +3,7 @@ use serde_derive::Serialize;
 use crate::builtin_types;
 use crate::builtin_types::BuiltinTypeClass;
 use crate::parser;
-use crate::parser::{ElementTypeRef, StructDefn};
+use crate::parser::{ElementTypeRef, StructDefn, ArrayLen};
 use crate::type_check::TSchema;
 
 #[derive(PartialEq, Debug, Serialize)]
@@ -100,7 +100,7 @@ fn build_array_val(
     let value: Option<String>;
 
     // Get the array len
-    let arr_len = get_elem_size_value(&array_defn.len_identifier, siblings).unwrap();
+    let arr_len = get_elem_size_value(&array_defn.length, siblings).unwrap();
 
     // If we have a text type, then build up the individual characters into a single text string
     if builtin_types::is_type_class(&array_defn.kind, BuiltinTypeClass::Text) {
@@ -141,15 +141,21 @@ fn build_array_val(
     )
 }
 
-fn get_elem_size_value(name: &str, nuggets: &Vec<Nugget>) -> Option<usize> {
-    // Simple linear search among sibling nuggets
-    for nugget in nuggets {
-        if nugget.name == name {
-            let value = &nugget.value.as_ref().unwrap();
-            return Some(value.parse::<usize>().unwrap());
-        }
+fn get_elem_size_value(len: &ArrayLen, nuggets: &Vec<Nugget>) -> Option<u32> {
+
+    match len {
+        ArrayLen::Identifier(name) => {
+            // Simple linear search among sibling nuggets for referenced value
+            for nugget in nuggets {
+                if nugget.name == *name {
+                    let value = &nugget.value.as_ref().unwrap();
+                    return Some(value.parse::<u32>().unwrap());
+                }
+            }
+            None
+        },
+        ArrayLen::Static(i) => Some(*i),
     }
-    None
 }
 
 #[cfg(test)]

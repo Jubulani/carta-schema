@@ -23,17 +23,55 @@ pub enum TokenType {
     OpenBracket,  // [
     CloseBracket, // ]
     Semicolon,    // ;
+    Integer,      // Starts with 1-9, continues with any digit.  Max 9 digits, to guarantee that it will
+                  // always fit into a u32
 }
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Token {
     pub kind: TokenType,
-    pub value: String,
+    value: TokenValue,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+enum TokenValue {
+    StringVal(String),
+    IntVal(u32),
+}
+
+trait IntoTokenValue {
+    fn into_tokenvalue(self) -> TokenValue;
+}
+
+impl IntoTokenValue for String {
+    fn into_tokenvalue(self) -> TokenValue {
+        TokenValue::StringVal(self)
+    }
+}
+
+impl IntoTokenValue for u32 {
+    fn into_tokenvalue(self) -> TokenValue {
+        TokenValue::IntVal(self)
+    }
 }
 
 impl Token {
-    pub fn new(kind: TokenType, value: String) -> Token {
-        Token { kind, value }
+    fn new<V: IntoTokenValue>(kind: TokenType, value: V) -> Token {
+        Token { kind, value: value.into_tokenvalue() }
+    }
+
+    pub fn get_string(self: Self) -> String {
+        match self.value {
+            TokenValue::StringVal(sval) => sval,
+            TokenValue::IntVal(ival) => ival.to_string(),
+        }
+    }
+
+    pub fn get_int(self: Self) -> u32 {
+        match self.value {
+            TokenValue::StringVal(_) => panic!("Expected int, got String in token value"),
+            TokenValue::IntVal(i) => i
+        }
     }
 }
 
@@ -128,6 +166,62 @@ impl TokeniserState for WordState {
         } else {
             // Otherwise, the next character is not a valid word character.  Emit the Word found so far,
             // and continue processing the input character as a potential new unknown token.
+            tokens.push(self.get_token());
+
+            if let Some(s) = new_state(c, tokens)? {
+                Ok(s)
+            } else {
+                Ok(Box::new(EmptyState))
+            }
+        }
+    }
+
+    fn eof(self: Box<Self>) -> Result<Option<Token>, CartaError> {
+        Ok(Some(self.get_token()))
+    }
+}
+
+struct IntegerState {
+    value: u32,
+    num_digits: usize,
+}
+
+impl IntegerState {
+    fn new(c: char) -> Result<IntegerState, CartaError> {
+        let val = c.to_digit(10).unwrap();
+        // can't start with a 0
+        if val == 0 {
+            return Err(CartaError::LeadingZero());
+        }
+        Ok(IntegerState {
+            value: val,
+            num_digits: 1
+        })
+    }
+
+    fn get_token(self: Box<Self>) -> Token {
+        Token::new(TokenType::Integer, self.value)
+    }
+}
+
+impl TokeniserState for IntegerState {
+    fn new_char(
+        mut self: Box<Self>,
+        c: char,
+        tokens: &mut Vec<Token>,
+    ) -> Result<Box<dyn TokeniserState>, CartaError> {
+        if let Some(new_val) = c.to_digit(10) {
+            // Check we will still be in bounds
+            if self.num_digits > 8 {
+                Err(CartaError::IntegerTooLarge())
+            } else {
+                self.value *= 10;
+                self.value += new_val;
+                self.num_digits += 1;
+                Ok(self)
+            }
+        } else {
+            // We've finished the integer
             tokens.push(self.get_token());
 
             if let Some(s) = new_state(c, tokens)? {
@@ -250,6 +344,10 @@ fn new_state(
         return Ok(Some(Box::new(WordState::new(c))));
     }
 
+    if c.is_digit(10) {
+        return Ok(Some(Box::new(IntegerState::new(c)?)));
+    }
+
     match c {
         ':' => tokens.push(Token::new(TokenType::Colon, c.to_string())),
         '{' => tokens.push(Token::new(TokenType::OpenBrace, c.to_string())),
@@ -269,16 +367,26 @@ fn new_state(
 mod test {
     use super::*;
 
+    impl IntoTokenValue for &str {
+        fn into_tokenvalue(self) -> TokenValue {
+            TokenValue::StringVal(self.to_string())
+        }
+    }
+
+    fn token<V: IntoTokenValue>(kind: TokenType, val: V) -> Option<Token> {
+        Some(Token {
+            kind,
+            value: val.into_tokenvalue()
+        })
+    }
+
     #[test]
     fn tokenise_word() -> Result<(), CartaError> {
         let tok = Tokeniser::new("abc")?;
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "abc".to_string()
-            })
+            token(TokenType::Word, "abc")
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -290,10 +398,7 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "abc23".to_string()
-            })
+            token(TokenType::Word, "abc23")
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -305,17 +410,11 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::NewLine,
-                value: "\n".to_string()
-            })
+            token(TokenType::NewLine, "\n")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "_abc_abc".to_string()
-            })
+            token(TokenType::Word, "_abc_abc")
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -327,10 +426,7 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "abc".to_string()
-            })
+            token(TokenType::Word, "abc")
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -342,38 +438,23 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "abc".to_string()
-            })
+            token(TokenType::Word, "abc")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "def".to_string()
-            })
+            token(TokenType::Word, "def")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::NewLine,
-                value: "\n".to_string()
-            })
+            token(TokenType::NewLine, "\n")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "ghi".to_string()
-            })
+            token(TokenType::Word, "ghi")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "jkl".to_string()
-            })
+            token(TokenType::Word, "jkl")
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -385,24 +466,15 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "abc".to_string()
-            })
+            token(TokenType::Word, "abc")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Colon,
-                value: ":".to_string()
-            })
+            token(TokenType::Colon, ":")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "uint64_le".to_string()
-            })
+            token(TokenType::Word, "uint64_le")
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -420,108 +492,63 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::NewLine,
-                value: "\n".to_string()
-            })
+            token(TokenType::NewLine, "\n")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "struct".to_string()
-            })
+            token(TokenType::Word, "struct")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "new_type".to_string()
-            })
+            token(TokenType::Word, "new_type")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::OpenBrace,
-                value: "{".to_string()
-            })
+            token(TokenType::OpenBrace, "{")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::NewLine,
-                value: "\n".to_string()
-            })
+            token(TokenType::NewLine, "\n")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "val1".to_string()
-            })
+            token(TokenType::Word, "val1")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Colon,
-                value: ":".to_string()
-            })
+            token(TokenType::Colon, ":")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "type1".to_string()
-            })
+            token(TokenType::Word, "type1")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Comma,
-                value: ",".to_string()
-            })
+            token(TokenType::Comma, ",")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::NewLine,
-                value: "\n".to_string()
-            })
+            token(TokenType::NewLine, "\n")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "val2".to_string()
-            })
+            token(TokenType::Word, "val2")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Colon,
-                value: ":".to_string()
-            })
+            token(TokenType::Colon, ":")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "type2".to_string()
-            })
+            token(TokenType::Word, "type2")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::NewLine,
-                value: "\n".to_string()
-            })
+            token(TokenType::NewLine, "\n")
         );
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::CloseBrace,
-                value: "}".to_string()
-            })
+            token(TokenType::CloseBrace, "}")
         );
         Ok(())
     }
@@ -538,10 +565,7 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "abc".to_string()
-            })
+            token(TokenType::Word, "abc")
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -553,10 +577,7 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            Some(Token {
-                kind: TokenType::Word,
-                value: "abc".to_string()
-            })
+            token(TokenType::Word, "abc")
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -566,5 +587,29 @@ mod test {
     fn incomplete_block_comment() {
         let tok = Tokeniser::new("/*");
         assert_eq!(tok, Err(CartaError::UnclosedBlockComment()));
+    }
+
+    #[test]
+    fn integer() -> Result<(), CartaError> {
+        let tok = Tokeniser::new("123456789")?;
+        let mut iter = tok.into_iter();
+        assert_eq!(
+            iter.next(),
+            token(TokenType::Integer, 123456789)
+        );
+        assert_eq!(iter.next(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn large_integer() {
+        let tok = Tokeniser::new("1000000000");
+        assert_eq!(tok, Err(CartaError::IntegerTooLarge()));
+    }
+
+    #[test]
+    fn leading_zero() {
+        let tok = Tokeniser::new("01");
+        assert_eq!(tok, Err(CartaError::LeadingZero()));
     }
 }

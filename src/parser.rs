@@ -25,9 +25,15 @@ pub enum ElementTypeRef {
 }
 
 #[derive(PartialEq, Debug)]
+pub enum ArrayLen {
+    Identifier(String),
+    Static(u32),
+}
+
+#[derive(PartialEq, Debug)]
 pub struct ArrayDefn {
     pub kind: String,
-    pub len_identifier: String,
+    pub length: ArrayLen,
 }
 
 #[derive(PartialEq, Debug)]
@@ -117,15 +123,15 @@ impl CompilerState for StructState {
         match self.state {
             StructSubState::Begin => {
                 if t.kind != TokenType::Word {
-                    return Err(CartaError::ParseError("<name>".to_string(), t.value));
+                    return Err(CartaError::ParseError("<name>".to_string(), t.get_string()));
                 }
-                self.name = Some(t.value);
+                self.name = Some(t.get_string());
                 self.state = StructSubState::Name;
             }
             StructSubState::Name => {
                 // Next token must be OpenBrace
                 if t.kind != TokenType::OpenBrace {
-                    return Err(CartaError::ParseError("{".to_string(), t.value));
+                    return Err(CartaError::ParseError("{".to_string(), t.get_string()));
                 }
                 self.state = StructSubState::OpenBrace;
             }
@@ -136,15 +142,15 @@ impl CompilerState for StructState {
                     return Ok(Box::new(EmptyState {}));
                 }
                 TokenType::Word => {
-                    self.new_child_name = Some(t.value);
+                    self.new_child_name = Some(t.get_string());
                     self.state = StructSubState::ChildName;
                 }
-                _ => return Err(CartaError::ParseError("}".to_string(), t.value)),
+                _ => return Err(CartaError::ParseError("}".to_string(), t.get_string())),
             },
             StructSubState::ChildName => {
                 // Next token must be Colon
                 if t.kind != TokenType::Colon {
-                    return Err(CartaError::ParseError(":".to_string(), t.value));
+                    return Err(CartaError::ParseError(":".to_string(), t.get_string()));
                 }
                 self.state = StructSubState::ChildTypeOf;
             }
@@ -153,7 +159,7 @@ impl CompilerState for StructState {
                 match t.kind {
                     TokenType::Word => {
                         // Typename
-                        let kind = ElementTypeRef::TypeName(t.value);
+                        let kind = ElementTypeRef::TypeName(t.get_string());
                         self.append_child(kind);
 
                         self.state = StructSubState::ChildKind;
@@ -163,7 +169,7 @@ impl CompilerState for StructState {
                         let arr = Box::new(ArrayState::new(self));
                         return Ok(arr);
                     }
-                    _ => return Err(CartaError::ParseError("<typename>".to_string(), t.value)),
+                    _ => return Err(CartaError::ParseError("<typename>".to_string(), t.get_string())),
                 }
             }
             StructSubState::ChildKind => {
@@ -175,7 +181,7 @@ impl CompilerState for StructState {
                         self.add_complete_struct(schema);
                         return Ok(Box::new(EmptyState {}));
                     }
-                    _ => return Err(CartaError::ParseError(",".to_string(), t.value)),
+                    _ => return Err(CartaError::ParseError(",".to_string(), t.get_string())),
                 }
             }
         }
@@ -188,7 +194,7 @@ struct ArrayState {
     parent: Box<StructState>,
     state: ArraySubState,
     kind: Option<String>,
-    len_identifier: Option<String>,
+    length: Option<ArrayLen>
 }
 
 impl ArrayState {
@@ -197,7 +203,7 @@ impl ArrayState {
             parent,
             state: ArraySubState::Begin,
             kind: None,
-            len_identifier: None,
+            length: None,
         }
     }
 }
@@ -225,40 +231,45 @@ impl CompilerState for ArrayState {
             ArraySubState::Begin => {
                 // Firstly, mmust have a typename
                 if t.kind != TokenType::Word {
-                    return Err(CartaError::ParseError("<typename>".to_string(), t.value));
+                    return Err(CartaError::ParseError("<typename>".to_string(), t.get_string()));
                 }
 
-                self.kind = Some(t.value);
+                self.kind = Some(t.get_string());
                 self.state = ArraySubState::Kind;
             }
             ArraySubState::Kind => {
                 // Next is semicolon separating type from length
                 if t.kind != TokenType::Semicolon {
-                    return Err(CartaError::ParseError(";".to_string(), t.value));
+                    return Err(CartaError::ParseError(";".to_string(), t.get_string()));
                 }
                 self.state = ArraySubState::Semicolon;
             }
             ArraySubState::Semicolon => {
                 // Next is length
-                if t.kind != TokenType::Word {
-                    return Err(CartaError::ParseError("<identifier>".to_string(), t.value));
+                match t.kind {
+                    TokenType::Word => {
+                        self.length = Some(ArrayLen::Identifier(t.get_string()));
+                    },
+                    TokenType::Integer => {
+                        self.length = Some(ArrayLen::Static(t.get_int()));
+                    },
+                    _ => return Err(CartaError::ParseError("<array_length>".to_string(), t.get_string())),
                 }
 
-                self.len_identifier = Some(t.value);
                 self.state = ArraySubState::Length;
             }
             ArraySubState::Length => {
                 // Finally, closing bracket
                 if t.kind != TokenType::CloseBracket {
-                    return Err(CartaError::ParseError("]".to_string(), t.value));
+                    return Err(CartaError::ParseError("]".to_string(), t.get_string()));
                 }
 
                 // Aaaand, we're done
-                // We know we have both kind and len_identifier values available, as we've successfully
+                // We know we have both kind and length values available, as we've successfully
                 // moved through all states
                 let arr_defn = ArrayDefn {
                     kind: self.kind.unwrap(),
-                    len_identifier: self.len_identifier.unwrap(),
+                    length: self.length.unwrap(),
                 };
                 self.parent
                     .append_child(ElementTypeRef::ArrayElem(arr_defn));
@@ -273,16 +284,16 @@ impl CompilerState for ArrayState {
 fn new_state(t: Token) -> Result<Option<Box<dyn CompilerState>>, CartaError> {
     if t.kind == TokenType::Word {
         // Match against language keywords
-        return match &*t.value {
+        return match t.get_string().as_ref() {
             "struct" => Ok(Some(Box::new(StructState::new()))),
-            _ => Err(CartaError::ParseError("<keyword>".to_string(), t.value)),
+            val => Err(CartaError::ParseError("<keyword>".to_string(), val.to_string())),
         };
     } else if t.kind == TokenType::NewLine {
         // Empty newline - nothing to parse
         return Ok(None);
     }
 
-    return Err(CartaError::ParseError("<keyword>".to_string(), t.value));
+    return Err(CartaError::ParseError("<keyword>".to_string(), t.get_string()));
 }
 
 pub fn compile_schema(tokeniser: Tokeniser) -> Result<Schema, CartaError> {
@@ -315,7 +326,7 @@ mod test {
             name: name.to_string(),
             kind: ElementTypeRef::ArrayElem(ArrayDefn {
                 kind: typename.to_string(),
-                len_identifier: length.to_string(),
+                length: ArrayLen::Identifier(length.to_string()),
             }),
         }
     }
@@ -518,6 +529,24 @@ mod test {
                 vec![
                     build_basic_element("len", "int8"),
                     build_array_element("arr1", "int8", "blah")
+                ]
+            ))
+        );
+        assert_eq!(iter.next(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn array_static_len() -> Result<(), CartaError> {
+        let tokeniser = Tokeniser::new("struct s {arr1: [int8; 4]}")?;
+        let schema = compile_schema(tokeniser)?;
+        let mut iter = schema.structs.iter();
+        assert_eq!(
+            iter.next(),
+            Some(&build_struct(
+                "s",
+                vec![
+                    build_array_element("arr1", "int8", "4")
                 ]
             ))
         );
