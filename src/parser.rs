@@ -123,7 +123,7 @@ impl CompilerState for StructState {
         match self.state {
             StructSubState::Begin => {
                 if t.kind != TokenType::Word {
-                    return Err(CartaError::new_parse_error(0, "<name>", t.get_string()));
+                    return Err(CartaError::new_parse_error(t.line_no, "<name>", t.get_string()));
                 }
                 self.name = Some(t.get_string());
                 self.state = StructSubState::Name;
@@ -131,7 +131,7 @@ impl CompilerState for StructState {
             StructSubState::Name => {
                 // Next token must be OpenBrace
                 if t.kind != TokenType::OpenBrace {
-                    return Err(CartaError::new_parse_error(0, "{", t.get_string()));
+                    return Err(CartaError::new_parse_error(t.line_no, "{", t.get_string()));
                 }
                 self.state = StructSubState::OpenBrace;
             }
@@ -145,12 +145,12 @@ impl CompilerState for StructState {
                     self.new_child_name = Some(t.get_string());
                     self.state = StructSubState::ChildName;
                 }
-                _ => return Err(CartaError::new_parse_error(0, "}", t.get_string())),
+                _ => return Err(CartaError::new_parse_error(t.line_no, "}", t.get_string())),
             },
             StructSubState::ChildName => {
                 // Next token must be Colon
                 if t.kind != TokenType::Colon {
-                    return Err(CartaError::new_parse_error(0, ":", t.get_string()));
+                    return Err(CartaError::new_parse_error(t.line_no, ":", t.get_string()));
                 }
                 self.state = StructSubState::ChildTypeOf;
             }
@@ -169,7 +169,7 @@ impl CompilerState for StructState {
                         let arr = Box::new(ArrayState::new(self));
                         return Ok(arr);
                     }
-                    _ => return Err(CartaError::new_parse_error(0, "<typename>", t.get_string())),
+                    _ => return Err(CartaError::new_parse_error(t.line_no, "<typename>", t.get_string())),
                 }
             }
             StructSubState::ChildKind => {
@@ -181,7 +181,7 @@ impl CompilerState for StructState {
                         self.add_complete_struct(schema);
                         return Ok(Box::new(EmptyState {}));
                     }
-                    _ => return Err(CartaError::new_parse_error(0, ",", t.get_string())),
+                    _ => return Err(CartaError::new_parse_error(t.line_no, ",", t.get_string())),
                 }
             }
         }
@@ -231,7 +231,7 @@ impl CompilerState for ArrayState {
             ArraySubState::Begin => {
                 // Firstly, mmust have a typename
                 if t.kind != TokenType::Word {
-                    return Err(CartaError::new_parse_error(0, "<typename>", t.get_string()));
+                    return Err(CartaError::new_parse_error(t.line_no, "<typename>", t.get_string()));
                 }
 
                 self.kind = Some(t.get_string());
@@ -240,7 +240,7 @@ impl CompilerState for ArrayState {
             ArraySubState::Kind => {
                 // Next is semicolon separating type from length
                 if t.kind != TokenType::Semicolon {
-                    return Err(CartaError::new_parse_error(0, ";", t.get_string()));
+                    return Err(CartaError::new_parse_error(t.line_no, ";", t.get_string()));
                 }
                 self.state = ArraySubState::Semicolon;
             }
@@ -253,7 +253,7 @@ impl CompilerState for ArrayState {
                     TokenType::Integer => {
                         self.length = Some(ArrayLen::Static(t.get_int()));
                     },
-                    _ => return Err(CartaError::new_parse_error(0, "<array_length>", t.get_string())),
+                    _ => return Err(CartaError::new_parse_error(t.line_no, "<array_length>", t.get_string())),
                 }
 
                 self.state = ArraySubState::Length;
@@ -261,7 +261,7 @@ impl CompilerState for ArrayState {
             ArraySubState::Length => {
                 // Finally, closing bracket
                 if t.kind != TokenType::CloseBracket {
-                    return Err(CartaError::new_parse_error(0, "]", t.get_string()));
+                    return Err(CartaError::new_parse_error(t.line_no, "]", t.get_string()));
                 }
 
                 // Aaaand, we're done
@@ -283,17 +283,19 @@ impl CompilerState for ArrayState {
 
 fn new_state(t: Token) -> Result<Option<Box<dyn CompilerState>>, CartaError> {
     if t.kind == TokenType::Word {
+        let line_no = t.line_no;  // Copy line_no before consuming t
+
         // Match against language keywords
         return match t.get_string().as_ref() {
             "struct" => Ok(Some(Box::new(StructState::new()))),
-            val => Err(CartaError::new_parse_error(0, "<keyword>", val.to_string())),
+            val => Err(CartaError::new_parse_error(line_no, "<keyword>", val.to_string())),
         };
     } else if t.kind == TokenType::NewLine {
         // Empty newline - nothing to parse
         return Ok(None);
     }
 
-    return Err(CartaError::new_parse_error(0, "<keyword>", t.get_string()));
+    return Err(CartaError::new_parse_error(t.line_no, "<keyword>", t.get_string()));
 }
 
 pub fn compile_schema(tokeniser: Tokeniser) -> Result<Schema, CartaError> {
@@ -409,7 +411,7 @@ mod test {
         let ret = compile_schema(tokeniser);
         assert_eq!(
             ret,
-            Err(CartaError::new_parse_error(0, ":", ",".to_string()))
+            Err(CartaError::new_parse_error(3, ":", ",".to_string()))
         );
 
         let tokeniser = Tokeniser::new(
@@ -421,7 +423,7 @@ mod test {
         let ret = compile_schema(tokeniser);
         assert_eq!(
             ret,
-            Err(CartaError::new_parse_error(0, "}", ":".to_string()))
+            Err(CartaError::new_parse_error(3, "}", ":".to_string()))
         );
 
         let tokeniser = Tokeniser::new(
@@ -433,7 +435,7 @@ mod test {
         let ret = compile_schema(tokeniser);
         assert_eq!(
             ret,
-            Err(CartaError::new_parse_error(0, "<name>", "{".to_string()))
+            Err(CartaError::new_parse_error(1, "<name>", "{".to_string()))
         );
 
         let tokeniser = Tokeniser::new(
@@ -445,7 +447,7 @@ mod test {
         let ret = compile_schema(tokeniser);
         assert_eq!(
             ret,
-            Err(CartaError::new_parse_error(0, "{", "inner_val1".to_string()))
+            Err(CartaError::new_parse_error(2, "{", "inner_val1".to_string()))
         );
 
         let tokeniser = Tokeniser::new(
@@ -457,7 +459,7 @@ mod test {
         let ret = compile_schema(tokeniser);
         assert_eq!(
             ret,
-            Err(CartaError::new_parse_error(0, "}", ":".to_string()))
+            Err(CartaError::new_parse_error(3, "}", ":".to_string()))
         );
 
         let tokeniser = Tokeniser::new(
@@ -469,7 +471,7 @@ mod test {
         let ret = compile_schema(tokeniser);
         assert_eq!(
             ret,
-            Err(CartaError::new_parse_error(0, "<typename>", ",".to_string()))
+            Err(CartaError::new_parse_error(2, "<typename>", ",".to_string()))
         );
 
         let tokeniser = Tokeniser::new(
@@ -481,7 +483,7 @@ mod test {
         let ret = compile_schema(tokeniser);
         assert_eq!(
             ret,
-            Err(CartaError::new_parse_error(0, ",", "inner_val2".to_string()))
+            Err(CartaError::new_parse_error(3, ",", "inner_val2".to_string()))
         );
         Ok(())
     }

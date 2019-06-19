@@ -30,7 +30,7 @@ pub enum TokenType {
 #[derive(PartialEq, Debug, Clone)]
 pub struct Token {
     pub kind: TokenType,
-    line_no: usize,
+    pub line_no: usize,
     value: TokenValue,
 }
 
@@ -259,13 +259,13 @@ impl TokeniserState for CommentState {
         self: Box<Self>,
         c: char,
         _: &mut Vec<Token>,
-        _: usize,
+        line_no: usize,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
         // Decide between a block comment and a line comment
         return match c {
             '/' => Ok(Box::new(LineCommentState)),
             '*' => Ok(Box::new(BlockCommentState)),
-            _ => Err(CartaError::new_unexpected_symbol(0, "* or /", c)),
+            _ => Err(CartaError::new_unexpected_symbol(line_no, "* or /", c)),
         };
     }
 
