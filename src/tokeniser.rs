@@ -30,6 +30,7 @@ pub enum TokenType {
 #[derive(PartialEq, Debug, Clone)]
 pub struct Token {
     pub kind: TokenType,
+    line_no: usize,
     value: TokenValue,
 }
 
@@ -56,8 +57,8 @@ impl IntoTokenValue for u32 {
 }
 
 impl Token {
-    fn new<V: IntoTokenValue>(kind: TokenType, value: V) -> Token {
-        Token { kind, value: value.into_tokenvalue() }
+    fn new<V: IntoTokenValue>(kind: TokenType, value: V, line_no: usize) -> Token {
+        Token { kind, value: value.into_tokenvalue(), line_no }
     }
 
     pub fn get_string(self: Self) -> String {
@@ -85,8 +86,14 @@ impl Tokeniser {
     pub fn new(data: &str) -> Result<Tokeniser, CartaError> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut state: Box<dyn TokeniserState> = Box::new(EmptyState {});
+        let mut line_no = 1;
+
         for c in data.chars() {
-            state = state.new_char(c, &mut tokens)?;
+            state = state.new_char(c, &mut tokens, line_no)?;
+            // Newlines count as being on the line they end, not the new line they start
+            if c == '\n' {
+                line_no += 1;
+            }
         }
 
         // Once we're done with the input, we may still be in the process of building a token.  If we are,
@@ -109,6 +116,7 @@ trait TokeniserState {
         self: Box<Self>,
         c: char,
         tokens: &mut Vec<Token>,
+        line_no: usize,
     ) -> Result<Box<dyn TokeniserState>, CartaError>;
 
     /// Pick up the final token if there is one waiting to be emmitted on end-of-input.
@@ -124,8 +132,9 @@ impl TokeniserState for EmptyState {
         self: Box<Self>,
         c: char,
         tokens: &mut Vec<Token>,
+        line_no: usize,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
-        if let Some(s) = new_state(c, tokens)? {
+        if let Some(s) = new_state(c, tokens, line_no)? {
             return Ok(s);
         }
         Ok(self)
@@ -139,17 +148,19 @@ impl TokeniserState for EmptyState {
 /// State representing processing of a `TokenType::Word`
 struct WordState {
     value: String,
+    line_no: usize,
 }
 
 impl WordState {
-    fn new(c: char) -> WordState {
+    fn new(c: char, line_no: usize) -> WordState {
         WordState {
             value: c.to_string(),
+            line_no
         }
     }
 
     fn get_token(self: Box<Self>) -> Token {
-        Token::new(TokenType::Word, self.value)
+        Token::new(TokenType::Word, self.value, self.line_no)
     }
 }
 
@@ -158,6 +169,7 @@ impl TokeniserState for WordState {
         mut self: Box<Self>,
         c: char,
         tokens: &mut Vec<Token>,
+        line_no: usize,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
         // Accept the token, and add it to the saved token value
         if c.is_alphabetic() || c.is_numeric() || c == '_' {
@@ -168,7 +180,7 @@ impl TokeniserState for WordState {
             // and continue processing the input character as a potential new unknown token.
             tokens.push(self.get_token());
 
-            if let Some(s) = new_state(c, tokens)? {
+            if let Some(s) = new_state(c, tokens, line_no)? {
                 Ok(s)
             } else {
                 Ok(Box::new(EmptyState))
@@ -184,10 +196,11 @@ impl TokeniserState for WordState {
 struct IntegerState {
     value: u32,
     num_digits: usize,
+    line_no: usize,
 }
 
 impl IntegerState {
-    fn new(c: char) -> Result<IntegerState, CartaError> {
+    fn new(c: char, line_no: usize) -> Result<IntegerState, CartaError> {
         let val = c.to_digit(10).unwrap();
         // can't start with a 0
         if val == 0 {
@@ -195,12 +208,13 @@ impl IntegerState {
         }
         Ok(IntegerState {
             value: val,
-            num_digits: 1
+            num_digits: 1,
+            line_no
         })
     }
 
     fn get_token(self: Box<Self>) -> Token {
-        Token::new(TokenType::Integer, self.value)
+        Token::new(TokenType::Integer, self.value, self.line_no)
     }
 }
 
@@ -209,6 +223,7 @@ impl TokeniserState for IntegerState {
         mut self: Box<Self>,
         c: char,
         tokens: &mut Vec<Token>,
+        line_no: usize,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
         if let Some(new_val) = c.to_digit(10) {
             // Check we will still be in bounds
@@ -224,7 +239,7 @@ impl TokeniserState for IntegerState {
             // We've finished the integer
             tokens.push(self.get_token());
 
-            if let Some(s) = new_state(c, tokens)? {
+            if let Some(s) = new_state(c, tokens, line_no)? {
                 Ok(s)
             } else {
                 Ok(Box::new(EmptyState))
@@ -244,6 +259,7 @@ impl TokeniserState for CommentState {
         self: Box<Self>,
         c: char,
         _: &mut Vec<Token>,
+        _: usize,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
         // Decide between a block comment and a line comment
         return match c {
@@ -265,6 +281,7 @@ impl TokeniserState for LineCommentState {
         self: Box<Self>,
         c: char,
         _: &mut Vec<Token>,
+        _: usize,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
         if c == '\n' {
             // Newline.  End of comment.
@@ -287,6 +304,7 @@ impl TokeniserState for BlockCommentState {
         self: Box<Self>,
         c: char,
         _: &mut Vec<Token>,
+        _: usize,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
         if c == '*' {
             // Maybe end of comment
@@ -308,6 +326,7 @@ impl TokeniserState for EndBlockCommentState {
         self: Box<Self>,
         c: char,
         _: &mut Vec<Token>,
+        _: usize,
     ) -> Result<Box<dyn TokeniserState>, CartaError> {
         if c == '/' {
             // End of comment
@@ -328,9 +347,10 @@ impl TokeniserState for EndBlockCommentState {
 fn new_state(
     c: char,
     tokens: &mut Vec<Token>,
+    line_no: usize,
 ) -> Result<Option<Box<dyn TokeniserState>>, CartaError> {
     if c == '\n' {
-        tokens.push(Token::new(TokenType::NewLine, c.to_string()));
+        tokens.push(Token::new(TokenType::NewLine, c.to_string(), line_no));
         return Ok(None);
     }
 
@@ -341,21 +361,21 @@ fn new_state(
 
     // Word tokens start with a letter or underscore.
     if c.is_alphabetic() || c == '_' {
-        return Ok(Some(Box::new(WordState::new(c))));
+        return Ok(Some(Box::new(WordState::new(c, line_no))));
     }
 
     if c.is_digit(10) {
-        return Ok(Some(Box::new(IntegerState::new(c)?)));
+        return Ok(Some(Box::new(IntegerState::new(c, line_no)?)));
     }
 
     match c {
-        ':' => tokens.push(Token::new(TokenType::Colon, c.to_string())),
-        '{' => tokens.push(Token::new(TokenType::OpenBrace, c.to_string())),
-        '}' => tokens.push(Token::new(TokenType::CloseBrace, c.to_string())),
-        ',' => tokens.push(Token::new(TokenType::Comma, c.to_string())),
-        '[' => tokens.push(Token::new(TokenType::OpenBracket, c.to_string())),
-        ']' => tokens.push(Token::new(TokenType::CloseBracket, c.to_string())),
-        ';' => tokens.push(Token::new(TokenType::Semicolon, c.to_string())),
+        ':' => tokens.push(Token::new(TokenType::Colon, c.to_string(), line_no)),
+        '{' => tokens.push(Token::new(TokenType::OpenBrace, c.to_string(), line_no)),
+        '}' => tokens.push(Token::new(TokenType::CloseBrace, c.to_string(), line_no)),
+        ',' => tokens.push(Token::new(TokenType::Comma, c.to_string(), line_no)),
+        '[' => tokens.push(Token::new(TokenType::OpenBracket, c.to_string(), line_no)),
+        ']' => tokens.push(Token::new(TokenType::CloseBracket, c.to_string(), line_no)),
+        ';' => tokens.push(Token::new(TokenType::Semicolon, c.to_string(), line_no)),
         '/' => return Ok(Some(Box::new(CommentState))), // Start a comment
         _ => return Err(CartaError::new_unknown_symbol(0, c)),
     }
@@ -373,10 +393,11 @@ mod test {
         }
     }
 
-    fn token<V: IntoTokenValue>(kind: TokenType, val: V) -> Option<Token> {
+    fn token<V: IntoTokenValue>(kind: TokenType, val: V, line_no: usize) -> Option<Token> {
         Some(Token {
             kind,
-            value: val.into_tokenvalue()
+            value: val.into_tokenvalue(),
+            line_no,
         })
     }
 
@@ -386,7 +407,7 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "abc")
+            token(TokenType::Word, "abc", 1)
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -398,7 +419,7 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "abc23")
+            token(TokenType::Word, "abc23", 1)
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -410,11 +431,11 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            token(TokenType::NewLine, "\n")
+            token(TokenType::NewLine, "\n", 1)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "_abc_abc")
+            token(TokenType::Word, "_abc_abc", 2)
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -426,7 +447,7 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "abc")
+            token(TokenType::Word, "abc", 1)
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -438,23 +459,23 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "abc")
+            token(TokenType::Word, "abc", 1)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "def")
+            token(TokenType::Word, "def", 1)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::NewLine, "\n")
+            token(TokenType::NewLine, "\n", 1)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "ghi")
+            token(TokenType::Word, "ghi", 2)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "jkl")
+            token(TokenType::Word, "jkl", 2)
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -466,15 +487,15 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "abc")
+            token(TokenType::Word, "abc", 1)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Colon, ":")
+            token(TokenType::Colon, ":", 1)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "uint64_le")
+            token(TokenType::Word, "uint64_le", 1)
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -492,63 +513,63 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            token(TokenType::NewLine, "\n")
+            token(TokenType::NewLine, "\n", 1)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "struct")
+            token(TokenType::Word, "struct", 2)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "new_type")
+            token(TokenType::Word, "new_type", 2)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::OpenBrace, "{")
+            token(TokenType::OpenBrace, "{", 2)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::NewLine, "\n")
+            token(TokenType::NewLine, "\n", 2)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "val1")
+            token(TokenType::Word, "val1", 3)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Colon, ":")
+            token(TokenType::Colon, ":", 3)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "type1")
+            token(TokenType::Word, "type1", 3)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Comma, ",")
+            token(TokenType::Comma, ",", 3)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::NewLine, "\n")
+            token(TokenType::NewLine, "\n", 3)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "val2")
+            token(TokenType::Word, "val2", 4)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Colon, ":")
+            token(TokenType::Colon, ":", 4)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "type2")
+            token(TokenType::Word, "type2", 4)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::NewLine, "\n")
+            token(TokenType::NewLine, "\n", 4)
         );
         assert_eq!(
             iter.next(),
-            token(TokenType::CloseBrace, "}")
+            token(TokenType::CloseBrace, "}", 5)
         );
         Ok(())
     }
@@ -565,7 +586,7 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "abc")
+            token(TokenType::Word, "abc", 2)
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -577,7 +598,7 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            token(TokenType::Word, "abc")
+            token(TokenType::Word, "abc", 1)
         );
         assert_eq!(iter.next(), None);
         Ok(())
@@ -595,7 +616,7 @@ mod test {
         let mut iter = tok.into_iter();
         assert_eq!(
             iter.next(),
-            token(TokenType::Integer, 123456789)
+            token(TokenType::Integer, 123456789, 1)
         );
         assert_eq!(iter.next(), None);
         Ok(())
