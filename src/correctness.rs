@@ -12,7 +12,7 @@ pub fn check_schema(schema: &TSchema) -> Result<(), CartaError> {
 
 fn check_root_element(schema: &TSchema) -> Result<(), CartaError> {
     return if !schema.types.contains_key("root") {
-        Err(CartaError::MissingRootElement())
+        Err(CartaError::new_missing_root_element(0))
     } else {
         Ok(())
     };
@@ -47,14 +47,14 @@ fn check_array_elem(
                         if builtin_types::is_type_class(typename, BuiltinTypeClass::Integer) {
                             return Ok(());
                         } else {
-                            return Err(CartaError::BadArrayLenType(id.clone()));
+                            return Err(CartaError::new_bad_array_len_type(0, id));
                         }
                     } else {
-                        return Err(CartaError::BadArrayLenType(id.clone()));
+                        return Err(CartaError::new_bad_array_len_type(0, id));
                     }
                 }
             }
-            Err(CartaError::BadArrayLen(id.clone()))
+            Err(CartaError::new_bad_array_len(0, id))
         }
     }
 }
@@ -92,7 +92,7 @@ mod test {
     fn no_root() {
         let schema = build_schema_with_elem("notroot".to_string());
         let res = check_schema(&schema);
-        assert_eq!(res, Err(CartaError::MissingRootElement()));
+        assert_eq!(res, Err(CartaError::new_missing_root_element(0)));
     }
 
     #[test]
@@ -112,7 +112,7 @@ mod test {
             },
         );
         let res = check_schema(&schema);
-        assert_eq!(res, Err(CartaError::BadArrayLen("unknown".to_string())));
+        assert_eq!(res, Err(CartaError::new_bad_array_len(0, "unknown")));
     }
 
     #[test]
@@ -123,7 +123,7 @@ mod test {
         let schema = parser::compile_schema(tokeniser).unwrap();
         let tschema = type_check::type_check_schema(schema).unwrap();
         let res = check_schema(&tschema);
-        assert_eq!(res, Err(CartaError::BadArrayLenType("var1".to_string())));
+        assert_eq!(res, Err(CartaError::new_bad_array_len_type(0, "var1")));
     }
 
     #[test]
@@ -133,6 +133,6 @@ mod test {
         let schema = parser::compile_schema(tokeniser).unwrap();
         let tschema = type_check::type_check_schema(schema).unwrap();
         let res = check_schema(&tschema);
-        assert_eq!(res, Err(CartaError::BadArrayLenType("var1".to_string())));
+        assert_eq!(res, Err(CartaError::new_bad_array_len_type(0, "var1")));
     }
 }

@@ -191,7 +191,7 @@ impl IntegerState {
         let val = c.to_digit(10).unwrap();
         // can't start with a 0
         if val == 0 {
-            return Err(CartaError::LeadingZero());
+            return Err(CartaError::new_leading_zero(0));
         }
         Ok(IntegerState {
             value: val,
@@ -213,7 +213,7 @@ impl TokeniserState for IntegerState {
         if let Some(new_val) = c.to_digit(10) {
             // Check we will still be in bounds
             if self.num_digits > 8 {
-                Err(CartaError::IntegerTooLarge())
+                Err(CartaError::new_integer_too_large(0))
             } else {
                 self.value *= 10;
                 self.value += new_val;
@@ -249,7 +249,7 @@ impl TokeniserState for CommentState {
         return match c {
             '/' => Ok(Box::new(LineCommentState)),
             '*' => Ok(Box::new(BlockCommentState)),
-            _ => Err(CartaError::UnexpectedSymbol(c, "* or /")),
+            _ => Err(CartaError::new_unexpected_symbol(0, "* or /", c)),
         };
     }
 
@@ -297,7 +297,7 @@ impl TokeniserState for BlockCommentState {
     }
 
     fn eof(self: Box<Self>) -> Result<Option<Token>, CartaError> {
-        Err(CartaError::UnclosedBlockComment())
+        Err(CartaError::new_unclosed_block_comment(0))
     }
 }
 
@@ -319,7 +319,7 @@ impl TokeniserState for EndBlockCommentState {
     }
 
     fn eof(self: Box<Self>) -> Result<Option<Token>, CartaError> {
-        Err(CartaError::UnclosedBlockComment())
+        Err(CartaError::new_unclosed_block_comment(0))
     }
 }
 
@@ -357,7 +357,7 @@ fn new_state(
         ']' => tokens.push(Token::new(TokenType::CloseBracket, c.to_string())),
         ';' => tokens.push(Token::new(TokenType::Semicolon, c.to_string())),
         '/' => return Ok(Some(Box::new(CommentState))), // Start a comment
-        _ => return Err(CartaError::UnknownSymbol(c)),
+        _ => return Err(CartaError::new_unknown_symbol(0, c)),
     }
 
     return Ok(None);
@@ -556,7 +556,7 @@ mod test {
     #[test]
     fn unknown_token() {
         let tok = Tokeniser::new("\tabc😃");
-        assert_eq!(tok, Err(CartaError::UnknownSymbol('😃')));
+        assert_eq!(tok, Err(CartaError::new_unknown_symbol(0, '😃')));
     }
 
     #[test]
@@ -586,7 +586,7 @@ mod test {
     #[test]
     fn incomplete_block_comment() {
         let tok = Tokeniser::new("/*");
-        assert_eq!(tok, Err(CartaError::UnclosedBlockComment()));
+        assert_eq!(tok, Err(CartaError::new_unclosed_block_comment(0)));
     }
 
     #[test]
@@ -604,12 +604,12 @@ mod test {
     #[test]
     fn large_integer() {
         let tok = Tokeniser::new("1000000000");
-        assert_eq!(tok, Err(CartaError::IntegerTooLarge()));
+        assert_eq!(tok, Err(CartaError::new_integer_too_large(0)));
     }
 
     #[test]
     fn leading_zero() {
         let tok = Tokeniser::new("01");
-        assert_eq!(tok, Err(CartaError::LeadingZero()));
+        assert_eq!(tok, Err(CartaError::new_leading_zero(0)));
     }
 }

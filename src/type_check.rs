@@ -19,7 +19,7 @@ fn build_structs_map(types: Vec<StructDefn>) -> Result<HashMap<String, StructDef
 
     for kind in types.into_iter() {
         if types_map.contains_key::<str>(&kind.name) {
-            return Err(CartaError::DuplicateType(kind.name));
+            return Err(CartaError::new_duplicate_type(0, kind.name));
         }
         types_map.insert(kind.name.clone(), kind);
     }
@@ -40,7 +40,7 @@ fn check_all_types_defined(types_map: &HashMap<String, StructDefn>) -> Result<()
             if !builtin_types::is_builtin_type(&typename)
                 && types_map.get::<str>(&typename).is_none()
             {
-                return Err(CartaError::UnknownType(typename.to_string()));
+                return Err(CartaError::new_unknown_type(0, typename.to_string()));
             }
         }
     }
@@ -135,7 +135,7 @@ fn check_types_no_loops(types_map: &HashMap<String, StructDefn>) -> Result<(), C
         }
     }
     if !recursive_types.is_empty() {
-        return Err(CartaError::RecursiveTypes(recursive_types));
+        return Err(CartaError::new_recursive_types(0, recursive_types));
     }
 
     Ok(())
@@ -154,6 +154,7 @@ mod test {
     use super::*;
     use crate::parser::Element;
     use std::fmt::Debug;
+    use crate::error::CartaErrorCode;
 
     fn build_element(name: &str, typename: &str) -> Element {
         Element {
@@ -220,7 +221,7 @@ mod test {
         );
         let schema = Schema { structs: vec![t1] };
         let res = type_check_schema(schema);
-        assert_eq!(res, Err(CartaError::UnknownType("type2".to_string())));
+        assert_eq!(res, Err(CartaError::new_unknown_type(0, "type2".to_string())));
     }
 
     #[test]
@@ -243,7 +244,7 @@ mod test {
             structs: vec![t1, t2],
         };
         let res = type_check_schema(schema);
-        if let Err(CartaError::RecursiveTypes(data)) = res {
+        if let Err(CartaError {line_no: 0, code: CartaErrorCode::RecursiveTypes(data)}) = res {
             compare_vec_unordered(data, vec!["type1".to_string(), "type2".to_string()])
         } else {
             panic!("Unexpected value: {:?}", res);
@@ -340,7 +341,7 @@ mod test {
             structs: vec![t1, t2, t3, t4, t5, t6, t7],
         };
         let res = type_check_schema(schema);
-        if let Err(CartaError::RecursiveTypes(data)) = res {
+        if let Err(CartaError {line_no: 0, code: CartaErrorCode::RecursiveTypes(data)}) = res {
             compare_vec_unordered(
                 data,
                 vec![
@@ -370,7 +371,7 @@ mod test {
             structs: vec![t1, t2],
         };
         let res = type_check_schema(schema);
-        assert_eq!(res, Err(CartaError::DuplicateType("type1".to_string())));
+        assert_eq!(res, Err(CartaError::new_duplicate_type(0, "type1".to_string())));
     }
 
     #[test]
@@ -386,7 +387,7 @@ mod test {
         let res = type_check_schema(schema);
         assert_eq!(
             res,
-            Err(CartaError::RecursiveTypes(vec!["type1".to_string()]))
+            Err(CartaError::new_recursive_types(0, vec!["type1".to_string()]))
         );
     }
 
@@ -401,6 +402,6 @@ mod test {
         );
         let schema = Schema { structs: vec![t1] };
         let res = type_check_schema(schema);
-        assert_eq!(res, Err(CartaError::UnknownType("bad_type".to_string())));
+        assert_eq!(res, Err(CartaError::new_unknown_type(0, "bad_type".to_string())));
     }
 }
