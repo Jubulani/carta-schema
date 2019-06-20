@@ -19,7 +19,7 @@ fn build_structs_map(types: Vec<StructDefn>) -> Result<HashMap<String, StructDef
 
     for kind in types.into_iter() {
         if types_map.contains_key::<str>(&kind.name) {
-            return Err(CartaError::new_duplicate_type(0, kind.name));
+            return Err(CartaError::new_duplicate_type(kind.line_no, kind.name));
         }
         types_map.insert(kind.name.clone(), kind);
     }
@@ -36,11 +36,11 @@ fn check_all_types_defined(types_map: &HashMap<String, StructDefn>) -> Result<()
                 ElementTypeRef::TypeName(typename) => &typename,
                 ElementTypeRef::ArrayElem(array_defn) => &array_defn.kind,
             };
-            //let ElementTypeRef::TypeName(typename) = &member.kind;
+
             if !builtin_types::is_builtin_type(&typename)
                 && types_map.get::<str>(&typename).is_none()
             {
-                return Err(CartaError::new_unknown_type(0, typename.to_string()));
+                return Err(CartaError::new_unknown_type(member.line_no, typename.to_string()));
             }
         }
     }
@@ -129,13 +129,18 @@ fn check_types_no_loops(types_map: &HashMap<String, StructDefn>) -> Result<(), C
 
     // If any types remain that aren't listed in types_resolved, then we must have a loop
     let mut recursive_types = Vec::new();
+    // Report the line number of the first type with an error
+    let mut line_no = usize::max_value();
     for kind in types_map.values() {
         if types_resolved.get::<str>(&kind.name).is_none() {
             recursive_types.push(kind.name.clone());
+            if kind.line_no < line_no {
+                line_no = kind.line_no;
+            }
         }
     }
     if !recursive_types.is_empty() {
-        return Err(CartaError::new_recursive_types(0, recursive_types));
+        return Err(CartaError::new_recursive_types(line_no, recursive_types));
     }
 
     Ok(())
@@ -156,17 +161,19 @@ mod test {
     use std::fmt::Debug;
     use crate::error::CartaErrorCode;
 
-    fn build_element(name: &str, typename: &str) -> Element {
+    fn build_element(name: &str, typename: &str, line_no: usize) -> Element {
         Element {
             name: name.to_string(),
             kind: ElementTypeRef::TypeName(typename.to_string()),
+            line_no,
         }
     }
 
-    fn build_struct(name: &str, elements: Vec<Element>) -> StructDefn {
+    fn build_struct(name: &str, elements: Vec<Element>, line_no: usize) -> StructDefn {
         StructDefn {
             name: name.to_string(),
             elements: elements,
+            line_no
         }
     }
 
@@ -185,9 +192,9 @@ mod test {
 
     #[test]
     fn basic_ok() -> Result<(), CartaError> {
-        let elem1 = build_element("inner1", "uint16_le");
+        let elem1 = build_element("inner1", "uint16_le", 1);
         let schema = Schema {
-            structs: vec![build_struct("type1", vec![elem1])],
+            structs: vec![build_struct("type1", vec![elem1], 1)],
         };
         type_check_schema(schema)?;
         Ok(())
@@ -198,11 +205,12 @@ mod test {
         let t1 = build_struct(
             "type1",
             vec![
-                build_element("inner1", "type2"),
-                build_element("inner2", "uint64_le"),
+                build_element("inner1", "type2", 1),
+                build_element("inner2", "uint64_le", 1),
             ],
+            1
         );
-        let t2 = build_struct("type2", vec![build_element("inner3", "int8")]);
+        let t2 = build_struct("type2", vec![build_element("inner3", "int8", 2)], 2);
         let schema = Schema {
             structs: vec![t1, t2],
         };
@@ -215,13 +223,14 @@ mod test {
         let t1 = build_struct(
             "type1",
             vec![
-                build_element("inner1", "type2"),
-                build_element("inner2", "uint64_le"),
+                build_element("inner1", "type2", 2),
+                build_element("inner2", "uint64_le", 3),
             ],
+            1
         );
         let schema = Schema { structs: vec![t1] };
         let res = type_check_schema(schema);
-        assert_eq!(res, Err(CartaError::new_unknown_type(0, "type2".to_string())));
+        assert_eq!(res, Err(CartaError::new_unknown_type(2, "type2".to_string())));
     }
 
     #[test]
@@ -229,22 +238,24 @@ mod test {
         let t1 = build_struct(
             "type1",
             vec![
-                build_element("inner1", "type2"),
-                build_element("inner2", "uint64_le"),
+                build_element("inner1", "type2", 2),
+                build_element("inner2", "uint64_le", 3),
             ],
+            1
         );
         let t2 = build_struct(
             "type2",
             vec![
-                build_element("inner3", "type1"),
-                build_element("inner4", "int8"),
+                build_element("inner3", "type1", 6),
+                build_element("inner4", "int8", 7),
             ],
+            5
         );
         let schema = Schema {
             structs: vec![t1, t2],
         };
         let res = type_check_schema(schema);
-        if let Err(CartaError {line_no: 0, code: CartaErrorCode::RecursiveTypes(data)}) = res {
+        if let Err(CartaError {line_no: 1, code: CartaErrorCode::RecursiveTypes(data)}) = res {
             compare_vec_unordered(data, vec!["type1".to_string(), "type2".to_string()])
         } else {
             panic!("Unexpected value: {:?}", res);
@@ -256,26 +267,29 @@ mod test {
         let t1 = build_struct(
             "type1",
             vec![
-                build_element("inner1", "type2"),
-                build_element("inner2", "type3"),
+                build_element("inner1", "type2", 1),
+                build_element("inner2", "type3", 1),
             ],
+            1
         );
-        let t2 = build_struct("type2", vec![build_element("inner3", "type4")]);
+        let t2 = build_struct("type2", vec![build_element("inner3", "type4", 2)], 2);
         let t3 = build_struct(
             "type3",
             vec![
-                build_element("inner1", "type5"),
-                build_element("inner2", "type6"),
+                build_element("inner1", "type5", 3),
+                build_element("inner2", "type6", 3),
             ],
+            3
         );
-        let t4 = build_struct("type4", vec![build_element("inner3", "type5")]);
-        let t5 = build_struct("type5", vec![build_element("inner3", "type6")]);
+        let t4 = build_struct("type4", vec![build_element("inner3", "type5", 4)], 4);
+        let t5 = build_struct("type5", vec![build_element("inner3", "type6", 5)], 5);
         let t6 = build_struct(
             "type6",
             vec![
-                build_element("inner1", "int8"),
-                build_element("inner2", "f32_be"),
+                build_element("inner1", "int8", 6),
+                build_element("inner2", "f32_be", 6),
             ],
+            6
         );
         let schema = Schema {
             structs: vec![t1, t2, t3, t4, t5, t6],
@@ -289,59 +303,66 @@ mod test {
         let t1 = build_struct(
             "type1",
             vec![
-                build_element("inner1", "type2"),
-                build_element("inner2", "type3"),
+                build_element("inner1", "type2", 1),
+                build_element("inner2", "type3", 1),
             ],
+            1
         );
         let t2 = build_struct(
             "type2",
             vec![
-                build_element("inner3", "type3"),
-                build_element("inner4", "int8"),
+                build_element("inner3", "type3", 2),
+                build_element("inner4", "int8", 2),
             ],
+            2
         );
         let t3 = build_struct(
             "type3",
             vec![
-                build_element("inner3", "type4"),
-                build_element("inner4", "type5"),
+                build_element("inner3", "type4", 3),
+                build_element("inner4", "type5", 3),
             ],
+            3
         );
         let t4 = build_struct(
             "type4",
             vec![
-                build_element("inner3", "type7"),
-                build_element("inner4", "int8"),
+                build_element("inner3", "type7", 4),
+                build_element("inner4", "int8", 4),
             ],
+            4
         );
         let t5 = build_struct(
             "type5",
             vec![
-                build_element("inner3", "type6"),
-                build_element("inner4", "uint8"),
+                build_element("inner3", "type6", 5),
+                build_element("inner4", "uint8", 5),
             ],
+            5
         );
         let t6 = build_struct(
             "type6",
             vec![
-                build_element("inner3", "f64_le"),
-                build_element("inner4", "int64_be"),
+                build_element("inner3", "f64_le", 6),
+                build_element("inner4", "int64_be", 6),
             ],
+            6
         );
         let t7 = build_struct(
             "type7",
             vec![
-                build_element("inner3", "f64_be"),
-                build_element("inner4", "int64_le"),
-                build_element("inner3", "uint32_be"),
-                build_element("inner4", "type2"),
+                build_element("inner3", "f64_be", 7),
+                build_element("inner4", "int64_le", 7),
+                build_element("inner3", "uint32_be", 7),
+                build_element("inner4", "type2", 7),
             ],
+            7
         );
         let schema = Schema {
             structs: vec![t1, t2, t3, t4, t5, t6, t7],
         };
         let res = type_check_schema(schema);
-        if let Err(CartaError {line_no: 0, code: CartaErrorCode::RecursiveTypes(data)}) = res {
+        if let Err(CartaError {line_no: 1, code: CartaErrorCode::RecursiveTypes(data)}) = res {
             compare_vec_unordered(
                 data,
                 vec![
@@ -362,16 +383,17 @@ mod test {
         let t1 = build_struct(
             "type1",
             vec![
-                build_element("inner1", "uint8"),
-                build_element("inner2", "uint64_le"),
+                build_element("inner1", "uint8", 1),
+                build_element("inner2", "uint64_le", 1),
             ],
+            1
         );
-        let t2 = build_struct("type1", vec![build_element("inner3", "type1")]);
+        let t2 = build_struct("type1", vec![build_element("inner3", "type1", 2)], 2);
         let schema = Schema {
             structs: vec![t1, t2],
         };
         let res = type_check_schema(schema);
-        assert_eq!(res, Err(CartaError::new_duplicate_type(0, "type1".to_string())));
+        assert_eq!(res, Err(CartaError::new_duplicate_type(2, "type1".to_string())));
     }
 
     #[test]
@@ -379,15 +401,16 @@ mod test {
         let t1 = build_struct(
             "type1",
             vec![
-                build_element("inner1", "type1"),
-                build_element("inner2", "uint64_le"),
+                build_element("inner1", "type1", 1),
+                build_element("inner2", "uint64_le", 1),
             ],
+            1
         );
         let schema = Schema { structs: vec![t1] };
         let res = type_check_schema(schema);
         assert_eq!(
             res,
-            Err(CartaError::new_recursive_types(0, vec!["type1".to_string()]))
+            Err(CartaError::new_recursive_types(1, vec!["type1".to_string()]))
         );
     }
 
@@ -396,12 +419,13 @@ mod test {
         let t1 = build_struct(
             "type1",
             vec![
-                build_element("inner1", "bad_type"),
-                build_element("inner2", "uint64_le"),
+                build_element("inner1", "bad_type", 1),
+                build_element("inner2", "uint64_le", 1),
             ],
+            1
         );
         let schema = Schema { structs: vec![t1] };
         let res = type_check_schema(schema);
-        assert_eq!(res, Err(CartaError::new_unknown_type(0, "bad_type".to_string())));
+        assert_eq!(res, Err(CartaError::new_unknown_type(1, "bad_type".to_string())));
     }
 }

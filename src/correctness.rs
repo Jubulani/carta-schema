@@ -76,6 +76,7 @@ mod test {
             StructDefn {
                 name,
                 elements: Vec::new(),
+                line_no: 1,
             },
         );
         TSchema { types }
@@ -108,7 +109,9 @@ mod test {
                         kind: "int8".to_string(),
                         length: ArrayLen::Identifier("unknown".to_string()),
                     }),
+                    line_no: 1,
                 }],
+                line_no: 1
             },
         );
         let res = check_schema(&schema);

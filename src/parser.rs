@@ -16,6 +16,9 @@ impl Schema {
 pub struct Element {
     pub name: String,
     pub kind: ElementTypeRef,
+
+    // Line number of the start of the element definition
+    pub line_no: usize,
 }
 
 #[derive(PartialEq, Debug)]
@@ -40,6 +43,9 @@ pub struct ArrayDefn {
 pub struct StructDefn {
     pub name: String,
     pub elements: Vec<Element>,
+
+    // Line number of the start of the struct definition
+    pub line_no: usize,
 }
 
 trait CompilerState {
@@ -77,6 +83,7 @@ impl CompilerState for EmptyState {
 
 struct StructState {
     state: StructSubState,
+    line_no: usize,
     name: Option<String>,
     complete_children: Vec<Element>,
     new_child_name: Option<String>,
@@ -93,9 +100,10 @@ enum StructSubState {
 }
 
 impl StructState {
-    fn new() -> StructState {
+    fn new(line_no: usize) -> StructState {
         StructState {
             state: StructSubState::Begin,
+            line_no,
             name: None,
             complete_children: Vec::new(),
             new_child_name: None,
@@ -106,14 +114,16 @@ impl StructState {
         let defn = StructDefn {
             name: self.name.unwrap(),
             elements: self.complete_children,
+            line_no: self.line_no,
         };
         schema.add_struct(defn);
     }
 
-    fn append_child(self: &mut Self, kind: ElementTypeRef) {
+    fn append_child(self: &mut Self, kind: ElementTypeRef, line_no: usize) {
         let elem = Element {
             name: self.new_child_name.take().unwrap(),
             kind,
+            line_no
         };
         self.complete_children.push(elem);
     }
@@ -168,9 +178,9 @@ impl CompilerState for StructState {
                 // Next token must be a type definition - a typename or array
                 match t.kind {
                     TokenType::Word => {
-                        // Typename
+                        let line_no = t.line_no;
                         let kind = ElementTypeRef::TypeName(t.get_string());
-                        self.append_child(kind);
+                        self.append_child(kind, line_no);
 
                         self.state = StructSubState::ChildKind;
                     }
@@ -282,7 +292,7 @@ impl CompilerState for ArrayState {
                     length: self.length.unwrap(),
                 };
                 self.parent
-                    .append_child(ElementTypeRef::ArrayElem(arr_defn));
+                    .append_child(ElementTypeRef::ArrayElem(arr_defn), t.line_no);
                 return Ok(self.parent);
             }
         }
@@ -297,7 +307,7 @@ fn new_state(t: Token) -> Result<Option<Box<dyn CompilerState>>, CartaError> {
 
         // Match against language keywords
         return match t.get_string().as_ref() {
-            "struct" => Ok(Some(Box::new(StructState::new()))),
+            "struct" => Ok(Some(Box::new(StructState::new(line_no)))),
             val => Err(CartaError::new_parse_error(line_no, "<keyword>", val.to_string())),
         };
     } else if t.kind == TokenType::NewLine {
@@ -327,27 +337,30 @@ pub fn compile_schema(tokeniser: Tokeniser) -> Result<Schema, CartaError> {
 mod test {
     use super::*;
 
-    fn build_basic_element(name: &str, typename: &str) -> Element {
+    fn build_basic_element(name: &str, typename: &str, line_no: usize) -> Element {
         Element {
             name: name.to_string(),
             kind: ElementTypeRef::TypeName(typename.to_string()),
+            line_no,
         }
     }
 
-    fn build_array_element(name: &str, typename: &str, length: &str) -> Element {
+    fn build_array_element(name: &str, typename: &str, length: &str, line_no: usize) -> Element {
         Element {
             name: name.to_string(),
             kind: ElementTypeRef::ArrayElem(ArrayDefn {
                 kind: typename.to_string(),
                 length: ArrayLen::Identifier(length.to_string()),
             }),
+            line_no,
         }
     }
 
-    fn build_struct(name: &str, elements: Vec<Element>) -> StructDefn {
+    fn build_struct(name: &str, elements: Vec<Element>, line_no: usize) -> StructDefn {
         StructDefn {
             name: name.to_string(),
             elements: elements,
+            line_no,
         }
     }
 
@@ -360,7 +373,8 @@ mod test {
             iter.next(),
             Some(&build_struct(
                 "s",
-                vec![build_basic_element("new_name", "uint64_le")]
+                vec![build_basic_element("new_name", "uint64_le", 1)],
+                1
             ))
         );
         assert_eq!(iter.next(), None);
@@ -401,10 +415,11 @@ mod test {
             Some(&build_struct(
                 "s",
                 vec![
-                    build_basic_element("name1", "int8"),
-                    build_basic_element("name2", "uint64_be"),
-                    build_basic_element("name3", "f64_le"),
-                ]
+                    build_basic_element("name1", "int8", 2),
+                    build_basic_element("name2", "uint64_be", 3),
+                    build_basic_element("name3", "f64_le", 4),
+                ],
+                1
             ))
         );
         assert_eq!(iter.next(), None);
@@ -509,9 +524,10 @@ mod test {
             Some(&build_struct(
                 "s",
                 vec![
-                    build_basic_element("len", "int8"),
-                    build_array_element("arr1", "int8", "len")
-                ]
+                    build_basic_element("len", "int8", 1),
+                    build_array_element("arr1", "int8", "len", 1)
+                ],
+                1
             ))
         );
         assert_eq!(iter.next(), None);
@@ -528,9 +544,10 @@ mod test {
             Some(&build_struct(
                 "s",
                 vec![
-                    build_basic_element("len", "int8"),
-                    build_array_element("arr1", "int8", "blah")
-                ]
+                    build_basic_element("len", "int8", 1),
+                    build_array_element("arr1", "int8", "blah", 1)
+                ],
+                1
             ))
         );
         assert_eq!(iter.next(), None);
@@ -553,8 +570,10 @@ mod test {
                             kind: "int8".to_string(),
                             length: ArrayLen::Static(4),
                         }),
+                        line_no: 1,
                     }
-                ]
+                ],
+                1
             ))
         );
         assert_eq!(iter.next(), None);
@@ -566,6 +585,49 @@ mod test {
         let tokeniser = Tokeniser::new("struct s {field_1").unwrap();
         let result = compile_schema(tokeniser);
         assert_eq!(result, Err(CartaError::new_incomplete_input(0)));
+    }
+
+    #[test]
+    fn line_numbers() -> Result<(), CartaError> {
+        let tokeniser = Tokeniser::new("
+            struct s {field_1: int8}
+            struct s2 {field_1: int16_le}
+            struct s3 {
+                field_1: int64_be,
+                arr: [int8; field_1],
+            }
+        ")?;
+        let schema = compile_schema(tokeniser)?;
+        let mut iter = schema.structs.iter();
+        assert_eq!(
+            iter.next(),
+            Some(&build_struct(
+                "s",
+                vec![build_basic_element("field_1", "int8", 2)],
+                2
+            ))
+        );
+        assert_eq!(
+            iter.next(),
+            Some(&build_struct(
+                "s2",
+                vec![build_basic_element("field_1", "int16_le", 3)],
+                3
+            ))
+        );
+        assert_eq!(
+            iter.next(),
+            Some(&build_struct(
+                "s3",
+                vec![
+                    build_basic_element("field_1", "int64_be", 5),
+                    build_array_element("arr", "int8", "field_1", 6)
+                ],
+                4
+            ))
+        );
+        assert_eq!(iter.next(), None);
+        Ok(())
     }
 
 }
