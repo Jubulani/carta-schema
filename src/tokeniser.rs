@@ -23,8 +23,8 @@ pub enum TokenType {
     OpenBracket,  // [
     CloseBracket, // ]
     Semicolon,    // ;
-    Integer,      // Starts with 1-9, continues with any digit.  Max 9 digits, to guarantee that it will
-                  // always fit into a u32
+    Integer, // Starts with 1-9, continues with any digit.  Max 9 digits, to guarantee that it will
+             // always fit into a u32
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -58,7 +58,11 @@ impl IntoTokenValue for u32 {
 
 impl Token {
     fn new<V: IntoTokenValue>(kind: TokenType, value: V, line_no: usize) -> Token {
-        Token { kind, value: value.into_tokenvalue(), line_no }
+        Token {
+            kind,
+            value: value.into_tokenvalue(),
+            line_no,
+        }
     }
 
     pub fn get_string(self: Self) -> String {
@@ -71,7 +75,7 @@ impl Token {
     pub fn get_int(self: Self) -> u32 {
         match self.value {
             TokenValue::StringVal(_) => panic!("Expected int, got String in token value"),
-            TokenValue::IntVal(i) => i
+            TokenValue::IntVal(i) => i,
         }
     }
 }
@@ -155,7 +159,7 @@ impl WordState {
     fn new(c: char, line_no: usize) -> WordState {
         WordState {
             value: c.to_string(),
-            line_no
+            line_no,
         }
     }
 
@@ -209,7 +213,7 @@ impl IntegerState {
         Ok(IntegerState {
             value: val,
             num_digits: 1,
-            line_no
+            line_no,
         })
     }
 
@@ -377,7 +381,7 @@ fn new_state(
         ']' => tokens.push(Token::new(TokenType::CloseBracket, c.to_string(), line_no)),
         ';' => tokens.push(Token::new(TokenType::Semicolon, c.to_string(), line_no)),
         '/' => return Ok(Some(Box::new(CommentState))), // Start a comment
-        _ => return Err(CartaError::new_unknown_symbol(0, c)),
+        _ => return Err(CartaError::new_unknown_symbol(line_no, c)),
     }
 
     return Ok(None);
@@ -405,10 +409,7 @@ mod test {
     fn tokenise_word() -> Result<(), CartaError> {
         let tok = Tokeniser::new("abc")?;
         let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "abc", 1)
-        );
+        assert_eq!(iter.next(), token(TokenType::Word, "abc", 1));
         assert_eq!(iter.next(), None);
         Ok(())
     }
@@ -417,10 +418,7 @@ mod test {
     fn space_at_start_plus_number() -> Result<(), CartaError> {
         let tok = Tokeniser::new(" abc23")?;
         let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "abc23", 1)
-        );
+        assert_eq!(iter.next(), token(TokenType::Word, "abc23", 1));
         assert_eq!(iter.next(), None);
         Ok(())
     }
@@ -429,14 +427,8 @@ mod test {
     fn newline_at_start_plus_underscore() -> Result<(), CartaError> {
         let tok = Tokeniser::new("\n_abc_abc")?;
         let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            token(TokenType::NewLine, "\n", 1)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "_abc_abc", 2)
-        );
+        assert_eq!(iter.next(), token(TokenType::NewLine, "\n", 1));
+        assert_eq!(iter.next(), token(TokenType::Word, "_abc_abc", 2));
         assert_eq!(iter.next(), None);
         Ok(())
     }
@@ -445,10 +437,7 @@ mod test {
     fn whitespace_at_start_tab() -> Result<(), CartaError> {
         let tok = Tokeniser::new("\tabc")?;
         let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "abc", 1)
-        );
+        assert_eq!(iter.next(), token(TokenType::Word, "abc", 1));
         assert_eq!(iter.next(), None);
         Ok(())
     }
@@ -457,26 +446,11 @@ mod test {
     fn multiple_words() -> Result<(), CartaError> {
         let tok = Tokeniser::new("abc def\nghi\tjkl ")?;
         let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "abc", 1)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "def", 1)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::NewLine, "\n", 1)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "ghi", 2)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "jkl", 2)
-        );
+        assert_eq!(iter.next(), token(TokenType::Word, "abc", 1));
+        assert_eq!(iter.next(), token(TokenType::Word, "def", 1));
+        assert_eq!(iter.next(), token(TokenType::NewLine, "\n", 1));
+        assert_eq!(iter.next(), token(TokenType::Word, "ghi", 2));
+        assert_eq!(iter.next(), token(TokenType::Word, "jkl", 2));
         assert_eq!(iter.next(), None);
         Ok(())
     }
@@ -485,18 +459,9 @@ mod test {
     fn basic_typeof() -> Result<(), CartaError> {
         let tok = Tokeniser::new("abc: uint64_le")?;
         let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "abc", 1)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Colon, ":", 1)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "uint64_le", 1)
-        );
+        assert_eq!(iter.next(), token(TokenType::Word, "abc", 1));
+        assert_eq!(iter.next(), token(TokenType::Colon, ":", 1));
+        assert_eq!(iter.next(), token(TokenType::Word, "uint64_le", 1));
         assert_eq!(iter.next(), None);
         Ok(())
     }
@@ -511,66 +476,21 @@ mod test {
         }",
         )?;
         let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            token(TokenType::NewLine, "\n", 1)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "struct", 2)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "new_type", 2)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::OpenBrace, "{", 2)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::NewLine, "\n", 2)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "val1", 3)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Colon, ":", 3)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "type1", 3)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Comma, ",", 3)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::NewLine, "\n", 3)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "val2", 4)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Colon, ":", 4)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "type2", 4)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::NewLine, "\n", 4)
-        );
-        assert_eq!(
-            iter.next(),
-            token(TokenType::CloseBrace, "}", 5)
-        );
+        assert_eq!(iter.next(), token(TokenType::NewLine, "\n", 1));
+        assert_eq!(iter.next(), token(TokenType::Word, "struct", 2));
+        assert_eq!(iter.next(), token(TokenType::Word, "new_type", 2));
+        assert_eq!(iter.next(), token(TokenType::OpenBrace, "{", 2));
+        assert_eq!(iter.next(), token(TokenType::NewLine, "\n", 2));
+        assert_eq!(iter.next(), token(TokenType::Word, "val1", 3));
+        assert_eq!(iter.next(), token(TokenType::Colon, ":", 3));
+        assert_eq!(iter.next(), token(TokenType::Word, "type1", 3));
+        assert_eq!(iter.next(), token(TokenType::Comma, ",", 3));
+        assert_eq!(iter.next(), token(TokenType::NewLine, "\n", 3));
+        assert_eq!(iter.next(), token(TokenType::Word, "val2", 4));
+        assert_eq!(iter.next(), token(TokenType::Colon, ":", 4));
+        assert_eq!(iter.next(), token(TokenType::Word, "type2", 4));
+        assert_eq!(iter.next(), token(TokenType::NewLine, "\n", 4));
+        assert_eq!(iter.next(), token(TokenType::CloseBrace, "}", 5));
         Ok(())
     }
 
@@ -584,10 +504,7 @@ mod test {
     fn line_comment() -> Result<(), CartaError> {
         let tok = Tokeniser::new("//\nabc//xyz\n")?;
         let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "abc", 2)
-        );
+        assert_eq!(iter.next(), token(TokenType::Word, "abc", 2));
         assert_eq!(iter.next(), None);
         Ok(())
     }
@@ -596,10 +513,7 @@ mod test {
     fn block_comment() -> Result<(), CartaError> {
         let tok = Tokeniser::new("/*abc*/abc/**/")?;
         let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Word, "abc", 1)
-        );
+        assert_eq!(iter.next(), token(TokenType::Word, "abc", 1));
         assert_eq!(iter.next(), None);
         Ok(())
     }
@@ -614,10 +528,7 @@ mod test {
     fn integer() -> Result<(), CartaError> {
         let tok = Tokeniser::new("123456789")?;
         let mut iter = tok.into_iter();
-        assert_eq!(
-            iter.next(),
-            token(TokenType::Integer, 123456789, 1)
-        );
+        assert_eq!(iter.next(), token(TokenType::Integer, 123456789, 1));
         assert_eq!(iter.next(), None);
         Ok(())
     }
