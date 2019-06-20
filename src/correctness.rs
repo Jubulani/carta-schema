@@ -40,6 +40,8 @@ fn check_array_elem(
         ArrayLen::Static(_) => Ok(()),
         // Check that the element we reference is a builtin integer type
         ArrayLen::Identifier(id) => {
+            // Array length must be listed earlier in the struct than the array, so we know what the length of the array
+            // is.  Iterate only up to arr_idx.
             for j in 0..arr_idx {
                 if struct_defn.elements[j].name == *id {
                     // Check that this element is a builtin type that is an integer type
@@ -47,14 +49,14 @@ fn check_array_elem(
                         if builtin_types::is_type_class(typename, BuiltinTypeClass::Integer) {
                             return Ok(());
                         } else {
-                            return Err(CartaError::new_bad_array_len_type(0, id));
+                            return Err(CartaError::new_bad_array_len_type(struct_defn.elements[arr_idx].line_no, id));
                         }
                     } else {
-                        return Err(CartaError::new_bad_array_len_type(0, id));
+                        return Err(CartaError::new_bad_array_len_type(struct_defn.elements[arr_idx].line_no, id));
                     }
                 }
             }
-            Err(CartaError::new_bad_array_len(0, id))
+            Err(CartaError::new_bad_array_len(struct_defn.elements[arr_idx].line_no, id))
         }
     }
 }
@@ -109,13 +111,13 @@ mod test {
                         kind: "int8".to_string(),
                         length: ArrayLen::Identifier("unknown".to_string()),
                     }),
-                    line_no: 1,
+                    line_no: 2,
                 }],
                 line_no: 1
             },
         );
         let res = check_schema(&schema);
-        assert_eq!(res, Err(CartaError::new_bad_array_len(0, "unknown")));
+        assert_eq!(res, Err(CartaError::new_bad_array_len(2, "unknown")));
     }
 
     #[test]
@@ -126,7 +128,7 @@ mod test {
         let schema = parser::compile_schema(tokeniser).unwrap();
         let tschema = type_check::type_check_schema(schema).unwrap();
         let res = check_schema(&tschema);
-        assert_eq!(res, Err(CartaError::new_bad_array_len_type(0, "var1")));
+        assert_eq!(res, Err(CartaError::new_bad_array_len_type(1, "var1")));
     }
 
     #[test]
@@ -136,6 +138,6 @@ mod test {
         let schema = parser::compile_schema(tokeniser).unwrap();
         let tschema = type_check::type_check_schema(schema).unwrap();
         let res = check_schema(&tschema);
-        assert_eq!(res, Err(CartaError::new_bad_array_len_type(0, "var1")));
+        assert_eq!(res, Err(CartaError::new_bad_array_len_type(1, "var1")));
     }
 }
