@@ -44,6 +44,9 @@ pub enum CartaErrorCode {
 
     #[fail(display = "Integer too large: Must be 9 digits or less")]
     IntegerTooLarge(),
+
+    #[fail(display = "Incomplete input")]
+    IncompleteInput(),
 }
 
 // Make errors slightly easier to construct
@@ -129,6 +132,13 @@ impl CartaError {
         CartaError {
             line_no,
             code: CartaErrorCode::IntegerTooLarge(),
+        }
+    }
+
+    pub fn new_incomplete_input(line_no: usize) -> CartaError {
+        CartaError {
+            line_no,
+            code: CartaErrorCode::IncompleteInput(),
         }
     }
 }

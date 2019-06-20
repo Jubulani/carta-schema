@@ -48,6 +48,12 @@ trait CompilerState {
         t: Token,
         schema: &mut Schema,
     ) -> Result<Box<dyn CompilerState>, CartaError>;
+
+    // Default implementation.  Parsing the state hasn't completed, so
+    // return an error.  Overwritten in EmptyState to return Ok instead.
+    fn eof(self: Box<Self>) -> Result<(), CartaError> {
+        Err(CartaError::new_incomplete_input(0))
+    }
 }
 
 struct EmptyState;
@@ -62,6 +68,10 @@ impl CompilerState for EmptyState {
             return Ok(s);
         }
         Ok(self)
+    }
+
+    fn eof(self: Box<Self>) -> Result<(), CartaError> {
+        Ok(())
     }
 }
 
@@ -307,7 +317,8 @@ pub fn compile_schema(tokeniser: Tokeniser) -> Result<Schema, CartaError> {
         state = state.new_token(token, &mut schema)?;
     }
 
-    // TODO: Handle incomplete input still remaining.
+    // Check that parsing has completed, and we're not waiting for anything else
+    state.eof()?;
 
     Ok(schema)
 }
@@ -549,4 +560,12 @@ mod test {
         assert_eq!(iter.next(), None);
         Ok(())
     }
+
+    #[test]
+    fn incomplete_input() {
+        let tokeniser = Tokeniser::new("struct s {field_1").unwrap();
+        let result = compile_schema(tokeniser);
+        assert_eq!(result, Err(CartaError::new_incomplete_input(0)));
+    }
+
 }
