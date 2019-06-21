@@ -497,7 +497,7 @@ mod test {
     #[test]
     fn unknown_token() {
         let tok = Tokeniser::new("\tabc😃");
-        assert_eq!(tok, Err(CartaError::new_unknown_symbol(0, '😃')));
+        assert_eq!(tok, Err(CartaError::new_unknown_symbol(1, '😃')));
     }
 
     #[test]
