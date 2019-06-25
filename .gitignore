@@ -1,8 +1,6 @@
-**/target
-native/index.node
-native/artifacts.json
+target
 **/*~
 **/node_modules
 **/.DS_Store
-carta-backend.log
 .vscode
+Cargo.lock
