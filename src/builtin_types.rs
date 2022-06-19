@@ -9,7 +9,7 @@ pub enum BuiltinTypeClass {
 
 struct CartaBuiltinType<'a> {
     size: usize,
-    value: &'a Fn(&[u8]) -> String,
+    value: &'a dyn Fn(&[u8]) -> String,
     class: BuiltinTypeClass,
 }
 
