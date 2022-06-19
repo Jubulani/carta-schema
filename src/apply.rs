@@ -1,12 +1,10 @@
-use serde_derive::Serialize;
-
 use crate::builtin_types;
 use crate::builtin_types::BuiltinTypeClass;
 use crate::parser;
-use crate::parser::{ElementTypeRef, StructDefn, ArrayLen};
+use crate::parser::{ArrayLen, ElementTypeRef, StructDefn};
 use crate::type_check::TSchema;
 
-#[derive(PartialEq, Debug, Serialize)]
+#[derive(PartialEq, Debug)]
 pub struct Nugget {
     pub start: usize,
     pub len: usize,
@@ -142,7 +140,6 @@ fn build_array_val(
 }
 
 fn get_elem_size_value(len: &ArrayLen, nuggets: &Vec<Nugget>) -> Option<u32> {
-
     match len {
         ArrayLen::Identifier(name) => {
             // Simple linear search among sibling nuggets for referenced value
@@ -153,7 +150,7 @@ fn get_elem_size_value(len: &ArrayLen, nuggets: &Vec<Nugget>) -> Option<u32> {
                 }
             }
             None
-        },
+        }
         ArrayLen::Static(i) => Some(*i),
     }
 }
