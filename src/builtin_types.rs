@@ -1,4 +1,4 @@
-use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use std::convert::TryFrom;
 
 #[derive(PartialEq)]
 pub enum BuiltinTypeClass {
@@ -13,6 +13,10 @@ struct CartaBuiltinType<'a> {
     class: BuiltinTypeClass,
 }
 
+fn to_arr<const SIZE: usize>(data: &[u8]) -> &[u8; SIZE] {
+    <&[u8; SIZE]>::try_from(&data[0..SIZE]).unwrap()
+}
+
 fn get_builtin_types(name: &str) -> Option<CartaBuiltinType<'static>> {
     match name {
         "int8" => Some(CartaBuiltinType {
@@ -22,32 +26,32 @@ fn get_builtin_types(name: &str) -> Option<CartaBuiltinType<'static>> {
         }),
         "int16_be" => Some(CartaBuiltinType {
             size: 2,
-            value: &|data| BigEndian::read_i16(data).to_string(),
+            value: &|data| i16::from_be_bytes(*to_arr::<2>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "int16_le" => Some(CartaBuiltinType {
             size: 2,
-            value: &|data| LittleEndian::read_u16(data).to_string(),
+            value: &|data| i16::from_le_bytes(*to_arr::<2>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "int32_be" => Some(CartaBuiltinType {
             size: 4,
-            value: &|data| BigEndian::read_i32(data).to_string(),
+            value: &|data| i32::from_be_bytes(*to_arr::<4>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "int32_le" => Some(CartaBuiltinType {
             size: 4,
-            value: &|data| LittleEndian::read_u32(data).to_string(),
+            value: &|data| i32::from_le_bytes(*to_arr::<4>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "int64_be" => Some(CartaBuiltinType {
             size: 8,
-            value: &|data| BigEndian::read_i64(data).to_string(),
+            value: &|data| i64::from_be_bytes(*to_arr::<8>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "int64_le" => Some(CartaBuiltinType {
             size: 8,
-            value: &|data| LittleEndian::read_i64(data).to_string(),
+            value: &|data| i64::from_le_bytes(*to_arr::<8>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "uint8" => Some(CartaBuiltinType {
@@ -57,52 +61,52 @@ fn get_builtin_types(name: &str) -> Option<CartaBuiltinType<'static>> {
         }),
         "uint16_be" => Some(CartaBuiltinType {
             size: 2,
-            value: &|data| BigEndian::read_u16(data).to_string(),
+            value: &|data| u16::from_be_bytes(*to_arr::<2>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "uint16_le" => Some(CartaBuiltinType {
             size: 2,
-            value: &|data| LittleEndian::read_u16(data).to_string(),
+            value: &|data| u16::from_le_bytes(*to_arr::<2>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "uint32_be" => Some(CartaBuiltinType {
             size: 4,
-            value: &|data| BigEndian::read_u32(data).to_string(),
+            value: &|data| u32::from_be_bytes(*to_arr::<4>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "uint32_le" => Some(CartaBuiltinType {
             size: 4,
-            value: &|data| LittleEndian::read_u32(data).to_string(),
+            value: &|data| u32::from_le_bytes(*to_arr::<4>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "uint64_be" => Some(CartaBuiltinType {
             size: 8,
-            value: &|data| BigEndian::read_u64(data).to_string(),
+            value: &|data| u64::from_be_bytes(*to_arr::<8>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "uint64_le" => Some(CartaBuiltinType {
             size: 8,
-            value: &|data| LittleEndian::read_u64(data).to_string(),
+            value: &|data| u64::from_le_bytes(*to_arr::<8>(data)).to_string(),
             class: BuiltinTypeClass::Integer,
         }),
         "f32_be" => Some(CartaBuiltinType {
             size: 4,
-            value: &|data| BigEndian::read_f32(data).to_string(),
+            value: &|data| f32::from_be_bytes(*to_arr::<4>(data)).to_string(),
             class: BuiltinTypeClass::Float,
         }),
         "f32_le" => Some(CartaBuiltinType {
             size: 4,
-            value: &|data| LittleEndian::read_f32(data).to_string(),
+            value: &|data| f32::from_le_bytes(*to_arr::<4>(data)).to_string(),
             class: BuiltinTypeClass::Float,
         }),
         "f64_be" => Some(CartaBuiltinType {
             size: 8,
-            value: &|data| BigEndian::read_f64(data).to_string(),
+            value: &|data| f64::from_be_bytes(*to_arr::<8>(data)).to_string(),
             class: BuiltinTypeClass::Float,
         }),
         "f64_le" => Some(CartaBuiltinType {
             size: 8,
-            value: &|data| LittleEndian::read_f64(data).to_string(),
+            value: &|data| f64::from_le_bytes(*to_arr::<8>(data)).to_string(),
             class: BuiltinTypeClass::Float,
         }),
         // Single ascii character
